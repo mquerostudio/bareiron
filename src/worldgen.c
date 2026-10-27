@@ -472,11 +472,13 @@ uint8_t buildChunkSection (int cx, int cy, int cz) {
     #ifdef ALLOW_CHESTS
       if (change->block == B_chest) continue;
     #endif
-    // Check if block is within this chunk section
+    // Check if block is within this chunk section. The column index
+    // already narrows x and z, but never trust it to index the buffer.
     if (change->y < cy || change->y >= cy + 16) continue;
     int dx = change->x - cx;
     int dy = change->y - cy;
     int dz = change->z - cz;
+    if ((unsigned)dx >= 16 || (unsigned)dz >= 16) continue;
     // Same 8-block sequence reversal as before, this time 10x dirtier
     // because we're working with specific indexes.
     unsigned address = (unsigned)(dx + (dz << 4) + (dy << 8));

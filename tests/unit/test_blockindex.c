@@ -157,6 +157,34 @@ static void test_full_capacity_fails_cleanly (void) {
   CHECK(getBlockChange(3, 100, 0) == 0xFF);
 }
 
+// One player has a chest open while another breaks it and builds there.
+// The open chest UI must lose its pointer into block_changes, and even a
+// corrupted entry must never make chunk building write out of bounds.
+static void test_stale_chest_pointer_cannot_corrupt_chunks (void) {
+  resetChanges(1000);
+  memset(player_data, 0, sizeof(player_data));
+  for (int i = 0; i < MAX_PLAYERS; i ++) player_data[i].client_fd = -1;
+
+  CHECK(makeBlockChange(20, 120, -20, B_chest) == 0);
+  int chest = bc_find(20, 120, -20);
+  uint8_t *storage_ptr = (uint8_t *)&block_changes[chest + 1];
+  memcpy(player_data[0].craft_items, &storage_ptr, sizeof(storage_ptr));
+  player_data[0].flags |= 0x80;
+
+  CHECK(makeBlockChange(20, 120, -20, B_stone) == 0);
+  CHECK((player_data[0].flags & 0x80) == 0);
+  uint8_t *left = NULL;
+  memcpy(&left, player_data[0].craft_items, sizeof(left));
+  CHECK(left == NULL);
+
+  CHECK(makeBlockChange(21, 120, -20, B_stone) == 0);
+  CHECK(makeBlockChange(22, 120, -20, B_stone) == 0);
+  // What a stale UI (or a forged packet) used to do: write an item into
+  // the bytes that now hold a block entry
+  storage_ptr[0] = 1; storage_ptr[1] = 0; storage_ptr[2] = 1;
+  buildChunkSection(16, 112, -32);
+}
+
 int main (void) {
   platform = bareiron_posix_platform();
   RUN(test_find_after_set_and_clear);
@@ -168,5 +196,6 @@ int main (void) {
   RUN(test_make_block_change_roundtrip);
   RUN(test_chest_takes_15_and_frees_them);
   RUN(test_full_capacity_fails_cleanly);
+  RUN(test_stale_chest_pointer_cannot_corrupt_chunks);
   return CHECK_DONE();
 }

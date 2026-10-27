@@ -608,6 +608,11 @@ int cs_clickContainer (int client_fd) {
   PlayerData *player;
   if (getPlayerData(client_fd, &player)) return 1;
 
+  // Chest clicks write through the pointer in craft_items, which is only
+  // valid while the chest UI is open (flag 0x80). The chest may also have
+  // been broken by someone else in the meantime.
+  if (window_id == 2 && !(player->flags & 0x80)) return 1;
+
   uint8_t apply_changes = true;
   // prevent dropping items
   if (mode == 4 && clicked_slot != -999) {

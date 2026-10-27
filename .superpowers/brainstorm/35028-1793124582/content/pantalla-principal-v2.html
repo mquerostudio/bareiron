@@ -1,0 +1,90 @@
+<style>
+  .dev{width:328px;height:402px;border-radius:92px;background:#0d0f12;color:#fff;position:relative;overflow:hidden;
+       box-shadow:0 0 0 7px #22262c,0 12px 34px rgba(0,0,0,.4);margin:8px auto 14px;font-family:-apple-system,Inter,system-ui,sans-serif}
+  .bg{position:absolute;inset:-14px;width:calc(100% + 28px);height:calc(100% + 28px);filter:blur(5px) saturate(1.15)}
+  .shade{position:absolute;inset:0;background:linear-gradient(rgba(0,0,0,.05),rgba(0,0,0,.18) 45%,rgba(0,0,0,.45))}
+  .in{position:absolute;left:14px;right:14px;top:43px;bottom:40px;display:flex;flex-direction:column;gap:7px}
+  .glass{background:rgba(14,20,16,.42);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.14)}
+  .st{display:flex;align-items:center;justify-content:center;gap:7px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+  .dot{width:8px;height:8px;border-radius:50%;background:#7dff4f;box-shadow:0 0 9px #7dff4f}
+  .ipbox{border-radius:22px;padding:9px 6px 7px;text-align:center}
+  .ip{font:800 30px/1.05 ui-monospace,Menlo,monospace;letter-spacing:-.02em;text-shadow:0 2px 0 rgba(0,0,0,.35)}
+  .port{font:500 11px ui-monospace,Menlo,monospace;color:rgba(255,255,255,.75);margin-top:3px}
+  .row{display:flex;align-items:center;gap:9px;border-radius:16px;padding:6px 12px;font-size:13px;font-weight:600}
+  .head{width:18px;height:18px;border-radius:4px;flex:none;box-shadow:inset -3px -3px 0 rgba(0,0,0,.25)}
+  .t{margin-left:auto;color:rgba(255,255,255,.7);font-size:11px;font-weight:500}
+  .foot{margin-top:auto;display:flex;justify-content:space-between;font-size:11px;padding:0 10px;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+  .pages{position:absolute;bottom:20px;left:0;right:0;display:flex;justify-content:center;gap:6px}
+  .pages b{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.45)} .pages b.on{background:#fff}
+  .map{border-radius:26px;overflow:hidden;position:relative;height:214px;border:1px solid rgba(255,255,255,.18)}
+  .map canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+  .pin{position:absolute;font-size:10px;font-weight:700;background:rgba(0,0,0,.6);padding:2px 6px 2px 4px;border-radius:7px;white-space:nowrap;display:flex;align-items:center;gap:4px}
+  .pin i{width:9px;height:9px;border-radius:2px;display:block;border:1px solid #fff}
+  .toast{border-radius:16px;padding:6px 12px;font-size:12px;font-weight:600;text-align:center}
+</style>
+
+<h2>Versión 2: fondo de paisaje + mapa en vivo como segunda página</h2>
+<p class="subtitle">Se pasa de una a otra con las flechas del Kode Dot o deslizando. El fondo es un paisaje de bloques propio (no una captura del juego) con desenfoque; ya en la app sería una imagen pixel-art dibujada para nosotros.</p>
+
+<div class="split">
+  <div>
+    <div class="dev">
+      <canvas class="bg" id="bg1" width="82" height="100"></canvas><div class="shade"></div>
+      <div class="in">
+        <div class="st"><span class="dot"></span>Servidor en marcha</div>
+        <div class="ipbox glass"><div class="ip">192.168.1.42</div><div class="port">puerto 25565 · Minecraft 1.21.8</div></div>
+        <div class="row glass"><span class="head" style="background:#c98a5a"></span>MQuero<span class="t">32 min</span></div>
+        <div class="row glass"><span class="head" style="background:#5a8ac9"></span>Luismi<span class="t">30 min</span></div>
+        <div class="row glass"><span class="head" style="background:#9a5ac9"></span>Jorge<span class="t">12 min</span></div>
+        <div class="row glass"><span class="head" style="background:#e0b23a"></span>Pablo<span class="t">2 min</span></div>
+        <div class="foot"><span>4 / 6 jugadores</span><span>activo 41 min</span></div>
+      </div>
+      <div class="pages"><b class="on"></b><b></b></div>
+    </div>
+    <p class="subtitle" style="text-align:center">Página 1 · Panel</p>
+  </div>
+  <div>
+    <div class="dev">
+      <canvas class="bg" id="bg2" width="82" height="100"></canvas><div class="shade"></div>
+      <div class="in">
+        <div class="st"><span class="dot"></span>192.168.1.42</div>
+        <div class="map" id="map"><canvas id="mm" width="56" height="44"></canvas>
+          <span class="pin" style="left:24%;top:24%"><i style="background:#c98a5a"></i>MQuero</span>
+          <span class="pin" style="left:50%;top:52%"><i style="background:#5a8ac9"></i>Luismi</span>
+          <span class="pin" style="left:12%;top:70%"><i style="background:#9a5ac9"></i>Jorge</span>
+          <span class="pin" style="left:60%;top:12%"><i style="background:#e0b23a"></i>Pablo</span>
+        </div>
+        <div class="toast glass">Pablo ha entrado al servidor</div>
+        <div class="foot"><span>4 / 6 jugadores</span><span>☀ día · 14:20</span></div>
+      </div>
+      <div class="pages"><b></b><b class="on"></b></div>
+    </div>
+    <p class="subtitle" style="text-align:center">Página 2 · Mapa en vivo</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  function land(id){
+    var c=document.getElementById(id); if(!c) return; var g=c.getContext('2d'), W=c.width, H=c.height;
+    var sky=g.createLinearGradient(0,0,0,H*.55); sky.addColorStop(0,'#5fb2ff'); sky.addColorStop(1,'#bfe4ff');
+    g.fillStyle=sky; g.fillRect(0,0,W,H);
+    var hz=function(x,b,a,f){return Math.round(b+Math.sin(x*f)*a+Math.sin(x*f*2.7+1)*a*.4)};
+    for(var x=0;x<W;x++){ var h=hz(x,46,5,.09); g.fillStyle='#4f8f3a'; g.fillRect(x,h,1,H); }
+    for(var x=0;x<W;x+=7){ var h=hz(x,44,5,.09); g.fillStyle='#2f6b2a'; g.fillRect(x-2,h-9,7,8); g.fillStyle='#5b3d24'; g.fillRect(x+1,h-2,1,4); }
+    for(var x=0;x<W;x++){ var h=hz(x,64,6,.12); g.fillStyle='#6cbf3f'; g.fillRect(x,h,1,2); g.fillStyle='#7a5432'; g.fillRect(x,h+2,1,H);
+      if(x%4==0){g.fillStyle='rgba(0,0,0,.12)'; g.fillRect(x,h+2,1,H);} }
+    [[6,58],[70,55],[40,62]].forEach(function(t){ g.fillStyle='#6b4a2b'; g.fillRect(t[0],t[1]-12,3,14);
+      g.fillStyle='#3e8a2e'; g.fillRect(t[0]-6,t[1]-24,15,13); g.fillStyle='#4fa13a'; g.fillRect(t[0]-3,t[1]-28,9,6); });
+    g.fillStyle='rgba(255,255,255,.85)'; g.fillRect(14,10,14,3); g.fillRect(17,8,8,2); g.fillRect(52,16,16,3); g.fillRect(56,14,7,2);
+  }
+  land('bg1'); land('bg2');
+  var m=document.getElementById('mm'); if(m){ var g=m.getContext('2d');
+    for(var y=0;y<m.height;y++)for(var x=0;x<m.width;x++){
+      var v=Math.sin(x*.22+7)+Math.cos(y*.27-3.5)+Math.sin((x+y)*.11)*.8;
+      g.fillStyle=v<-1.15?'#3b82c4':v<-.9?'#4a95d6':v<-.7?'#d9cf8f':v>1.6?'#8a8a8a':v>1.1?'#2d6b25':v>.3?'#4e9a35':v>-.2?'#5cab3d':'#67b844';
+      g.fillRect(x,y,1,1);
+      if(((x*13+y*7)%37)==0 && v>.2 && v<1.1){g.fillStyle='#24561e';g.fillRect(x,y,1,1);}
+    }}
+})();
+</script>

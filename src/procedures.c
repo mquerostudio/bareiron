@@ -513,6 +513,19 @@ void failBlockChange (short x, uint8_t y, short z, uint8_t block) {
 
 }
 
+// Players with this chest open lose their pointer into its item data, so
+// a stale chest UI can't write over entries that get reused
+static void releaseChestStorage (uint8_t *storage_ptr) {
+  for (int i = 0; i < MAX_PLAYERS; i ++) {
+    if (!(player_data[i].flags & 0x80)) continue;
+    uint8_t *held;
+    memcpy(&held, player_data[i].craft_items, sizeof(held));
+    if (held != storage_ptr) continue;
+    memset(player_data[i].craft_items, 0, sizeof(player_data[i].craft_items));
+    player_data[i].flags &= ~0x80;
+  }
+}
+
 uint8_t makeBlockChange (short x, uint8_t y, short z, uint8_t block) {
 
   // Transmit block update to all in-game clients
@@ -543,6 +556,7 @@ uint8_t makeBlockChange (short x, uint8_t y, short z, uint8_t block) {
     #ifdef ALLOW_CHESTS
     // When replacing chests, clear following 14 entries too (item data)
     if (block_changes[existing].block == B_chest) {
+      releaseChestStorage((uint8_t *)&block_changes[existing + 1]);
       for (int j = 1; j < 15; j ++) {
         block_changes[existing + j].block = 0xFF;
         bc_on_clear(existing + j);

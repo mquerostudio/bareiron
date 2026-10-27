@@ -1,0 +1,94 @@
+<style>
+  .dev{width:254px;height:311px;border-radius:71px;background:#0d0f12;color:#eef1f4;position:relative;overflow:hidden;
+       box-shadow:0 0 0 6px #22262c,0 10px 30px rgba(0,0,0,.35);margin:8px auto 14px;font-family:-apple-system,Inter,system-ui,sans-serif}
+  .in{position:absolute;left:11px;right:11px;top:33px;bottom:33px;display:flex;flex-direction:column;gap:6px}
+  .st{display:flex;align-items:center;justify-content:center;gap:6px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9be37a}
+  .dot{width:7px;height:7px;border-radius:50%;background:#5fd33a;box-shadow:0 0 8px #5fd33a}
+  .ip{font:700 25px/1.05 ui-monospace,Menlo,monospace;text-align:center;letter-spacing:-.02em}
+  .port{font:500 11px ui-monospace,Menlo,monospace;color:#8a939e;text-align:center}
+  .row{display:flex;align-items:center;gap:7px;background:#1a1e24;border-radius:13px;padding:5px 9px;font-size:11px}
+  .head{width:14px;height:14px;border-radius:3px;flex:none}
+  .t{margin-left:auto;color:#7d8692;font-size:9.5px}
+  .foot{margin-top:auto;display:flex;justify-content:space-between;font-size:9.5px;color:#8a939e;padding:0 6px}
+  .map{display:grid;grid-template-columns:repeat(28,1fr);border-radius:16px;overflow:hidden;position:relative;height:150px}
+  .map i{display:block}
+  .pin{position:absolute;font-size:8.5px;background:rgba(0,0,0,.65);padding:1px 4px;border-radius:5px;white-space:nowrap}
+  .pin:before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:#fff;margin-right:3px;vertical-align:middle}
+  .title{font:900 22px/1 ui-monospace,Menlo,monospace;text-align:center;color:#e9f7d8;text-shadow:2px 2px 0 #3b6b1f;letter-spacing:.04em}
+  .block{width:58px;height:58px;margin:2px auto 0;background:
+         linear-gradient(#6fbf3c 0 34%,#7a5432 34% 100%);border-radius:6px;box-shadow:inset -6px -6px 0 rgba(0,0,0,.25),inset 6px 6px 0 rgba(255,255,255,.12)}
+  .heads{display:flex;justify-content:center;gap:5px}
+  .heads .head{width:22px;height:22px;border-radius:4px}
+  .chip{align-self:center;background:#1a1e24;border-radius:20px;padding:5px 12px;font:700 15px ui-monospace,Menlo,monospace}
+</style>
+
+<h2>¿Qué pantalla te gusta para el servidor en marcha?</h2>
+<p class="subtitle">Pantalla del Kode Dot (410×502, a escala) mientras el servidor está encendido, con 4 jugadores. Puedes elegir varias o pedir una mezcla.</p>
+
+<div class="cards" data-multiselect>
+  <div class="card" data-choice="panel" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="dev"><div class="in">
+        <div class="st"><span class="dot"></span>Servidor en marcha</div>
+        <div class="ip">192.168.1.42</div>
+        <div class="port">puerto 25565 · Minecraft 1.21.8</div>
+        <div class="row"><span class="head" style="background:#c98a5a"></span>MQuero<span class="t">32 min</span></div>
+        <div class="row"><span class="head" style="background:#5a8ac9"></span>Luismi<span class="t">30 min</span></div>
+        <div class="row"><span class="head" style="background:#9a5ac9"></span>Jorge<span class="t">12 min</span></div>
+        <div class="row"><span class="head" style="background:#c95a6b"></span>Pablo<span class="t">2 min</span></div>
+        <div class="foot"><span>4 / 6 jugadores</span><span>activo 41 min</span></div>
+      </div></div>
+    </div>
+    <div class="card-body"><h3>A · Panel</h3><p>La IP en grande y la lista de quién está dentro. Claro y útil: lo que tenía la app del año pasado, pero mejor hecho.</p></div>
+  </div>
+
+  <div class="card" data-choice="mapa" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="dev"><div class="in">
+        <div class="st"><span class="dot"></span>192.168.1.42</div>
+        <div class="map" id="mm">
+          <span class="pin" style="left:30%;top:28%">MQuero</span>
+          <span class="pin" style="left:52%;top:55%">Luismi</span>
+          <span class="pin" style="left:18%;top:68%">Jorge</span>
+          <span class="pin" style="left:62%;top:18%">Pablo</span>
+        </div>
+        <div class="foot" style="margin-top:4px"><span>4 / 6 jugadores</span><span>día · 14:20</span></div>
+        <div class="row" style="justify-content:center;color:#9be37a">Pablo ha entrado</div>
+      </div></div>
+    </div>
+    <div class="card-body"><h3>B · Mapa en vivo</h3><p>Minimapa del mundo visto desde arriba con los jugadores moviéndose en tiempo real. Lo más vistoso en vídeo; ver jugadores moverse en la palma de la mano.</p></div>
+  </div>
+
+  <div class="card" data-choice="escaparate" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="dev"><div class="in" style="gap:8px">
+        <div class="title">KODECRAFT</div>
+        <div class="block"></div>
+        <div class="chip">192.168.1.42</div>
+        <div class="heads">
+          <span class="head" style="background:#c98a5a"></span><span class="head" style="background:#5a8ac9"></span>
+          <span class="head" style="background:#9a5ac9"></span><span class="head" style="background:#c95a6b"></span>
+          <span class="head" style="background:#2a2f36"></span><span class="head" style="background:#2a2f36"></span>
+        </div>
+        <div class="foot"><span>4 / 6</span><span>día · 14:20</span></div>
+      </div></div>
+    </div>
+    <div class="card-body"><h3>C · Escaparate</h3><p>Estética Minecraft (bloque, letras pixeladas), la IP y las caras de los jugadores. Pensado para que luzca en cámara más que para dar datos.</p></div>
+  </div>
+</div>
+
+<p class="subtitle">Nombres de ejemplo. Las «caras» serían las skins reales si se pueden sacar; si no, un color por jugador.</p>
+
+<script>
+  (function(){
+    var m=document.getElementById('mm'); if(!m) return;
+    var pal=['#3f7a2a','#4b8a31','#5a9a3a','#2f6e9e','#3b82b8','#c9b77a','#6b6b6b','#2d5e22'];
+    var s=7, h='';
+    for(var y=0;y<21;y++)for(var x=0;x<28;x++){
+      var v=Math.sin(x*.35+s)+Math.cos(y*.42-s*.5)+Math.sin((x+y)*.18);
+      var c=v<-1.1?pal[4]:v<-.8?pal[3]:v<-.6?pal[5]:v>1.5?pal[6]:v>.9?pal[7]:v>.2?pal[0]:v>-.2?pal[1]:pal[2];
+      h+='<i style="background:'+c+'"></i>';
+    }
+    m.insertAdjacentHTML('afterbegin',h);
+  })();
+</script>
