@@ -36,6 +36,32 @@
 
 static volatile int stop_requested = 0;
 
+// Connected client sockets, -1 for a free slot
+static int clients[MAX_CONNECTIONS];
+// Clients to disconnect at the next safe point of the loop
+static int kick_fds[MAX_CONNECTIONS];
+
+void kickClient (int client_fd) {
+  for (int i = 0; i < MAX_CONNECTIONS; i ++) {
+    if (kick_fds[i] == client_fd) return;
+  }
+  for (int i = 0; i < MAX_CONNECTIONS; i ++) {
+    if (kick_fds[i] != -1) continue;
+    kick_fds[i] = client_fd;
+    return;
+  }
+}
+
+static void processKicks (void) {
+  for (int k = 0; k < MAX_CONNECTIONS; k ++) {
+    if (kick_fds[k] == -1) continue;
+    for (int i = 0; i < MAX_CONNECTIONS; i ++) {
+      if (clients[i] == kick_fds[k]) disconnectClient(&clients[i], 12);
+    }
+    kick_fds[k] = -1;
+  }
+}
+
 void bareiron_request_stop (void) {
   stop_requested = 1;
 }
@@ -238,8 +264,10 @@ int bareiron_run (const BareironConfig *config) {
   }
 
   // Initialize all file descriptor references to -1 (unallocated)
-  int clients[MAX_CONNECTIONS];
-  for (int i = 0; i < MAX_CONNECTIONS; i ++) clients[i] = -1;
+  for (int i = 0; i < MAX_CONNECTIONS; i ++) {
+    clients[i] = -1;
+    kick_fds[i] = -1;
+  }
 
   statusSetRunning(true);
   statusEmit(BAREIRON_EVT_READY, NULL, config->port);
@@ -271,6 +299,7 @@ int bareiron_run (const BareironConfig *config) {
     for (int i = 0; i < MAX_CONNECTIONS; i ++) {
       if (clients[i] == -1) continue;
       handleClientPackets(&clients[i]);
+      processKicks();
     }
 
     // Send what's queued, including packets for clients that sent nothing

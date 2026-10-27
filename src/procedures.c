@@ -17,6 +17,7 @@
 #include "procedures.h"
 #include "blockindex.h"
 #include "status.h"
+#include "dispatch.h"
 #include "net.h"
 
 int client_states[MAX_CONNECTIONS * 2];
@@ -80,6 +81,13 @@ int reservePlayerData (int client_fd, uint8_t *uuid, char *name) {
   for (int i = 0; i < MAX_PLAYERS; i ++) {
     // Found existing player entry (UUID match)
     if (memcmp(player_data[i].uuid, uuid, 16) == 0) {
+      // Same player still on an older connection that never closed (lost
+      // WiFi, crashed client): that one leaves, the new one takes over
+      int old_fd = player_data[i].client_fd;
+      if (old_fd != -1 && old_fd != client_fd) {
+        handlePlayerDisconnect(old_fd);
+        kickClient(old_fd);
+      }
       // Set network file descriptor and username
       player_data[i].client_fd = client_fd;
       memcpy(player_data[i].name, name, 16);

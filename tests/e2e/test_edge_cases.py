@@ -92,6 +92,29 @@ class EdgeCaseTest(unittest.TestCase):
       self.assertEqual(names, ["bot1"])
       again.close()
 
+  def test_rejoin_while_old_connection_hangs(self):
+    # Like a phone that lost WiFi: the old socket stays open but silent
+    with ServerProcess(PORT) as server:
+      ghost = Bot(port=PORT, name="bot1")
+      ghost.login()
+      ghost.play_for(2)
+      again = Bot(port=PORT, name="bot1")
+      again.login()
+      again.play_for(2)
+      kinds = [(e["type"], e["name"]) for e in server.events() if e["type"] in ("join", "leave")]
+      self.assertEqual(kinds, [("join", "bot1"), ("leave", "bot1"), ("join", "bot1")])
+      self.assertTrue(wait_for(lambda: server.status()["player_count"] == 1, 4))
+      self.assertEqual([p["name"] for p in server.status()["players"]], ["bot1"])
+      # The server hangs up on the old connection instead of keeping it
+      closed = False
+      try:
+        ghost.pump(2)
+      except Exception:
+        closed = True
+      self.assertTrue(closed, "old connection still open")
+      again.close()
+      ghost.close()
+
   def test_status_pings_do_not_leak_slots(self):
     with ServerProcess(PORT) as server:
       for i in range(50):
