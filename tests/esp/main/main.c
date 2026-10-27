@@ -15,7 +15,7 @@ static void lock (void) { xSemaphoreTake(status_lock, portMAX_DELAY); }
 static void unlock (void) { xSemaphoreGive(status_lock); }
 static int64_t now_us (void) { return esp_timer_get_time(); }
 static void yield (void) { vTaskDelay(1); }
-static int save_world (const void *data, size_t len) { (void)data; (void)len; return 0; }
+static int save_world (void *data, size_t len) { (void)len; free(data); return 0; }
 static int load_world (void *data, size_t capacity, size_t *len) { (void)data; (void)capacity; (void)len; return 1; }
 
 static const BareironPlatform platform = {

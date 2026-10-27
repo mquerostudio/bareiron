@@ -31,7 +31,10 @@ typedef struct {
   int64_t (*now_us) (void);                // monotonic microseconds
   void    (*yield) (void);                 // called once per loop iteration
   void    (*on_event) (const BareironEvent *event); // may be NULL
-  int     (*save_world) (const void *data, size_t len);            // 0 = ok
+  // Takes ownership of `data` (allocated with alloc_large): write it now
+  // or hand it to another task, and free_large it once written. Called on
+  // the server thread, so it should return quickly. 0 = accepted.
+  int     (*save_world) (void *data, size_t len);
   int     (*load_world) (void *data, size_t capacity, size_t *len); // 0 = ok, 1 = no world yet, <0 = error
 } BareironPlatform;
 

@@ -27,13 +27,17 @@ static void posix_yield (void) {
 }
 
 // Writes to a temporary file first, so a crash mid-write never
-// leaves a truncated world behind
-static int posix_save_world (const void *data, size_t len) {
+// leaves a truncated world behind. Disks are fast here, so it writes
+// right away and then frees the snapshot it was handed.
+static int posix_save_world (void *data, size_t len) {
+  int result = -1;
   FILE *file = fopen("world.bin.tmp", "wb");
-  if (!file) return -1;
-  size_t written = fwrite(data, 1, len, file);
-  if (fclose(file) != 0 || written != len) return -1;
-  return rename("world.bin.tmp", "world.bin") == 0 ? 0 : -1;
+  if (file) {
+    size_t written = fwrite(data, 1, len, file);
+    if (fclose(file) == 0 && written == len && rename("world.bin.tmp", "world.bin") == 0) result = 0;
+  }
+  free(data);
+  return result;
 }
 
 static int posix_load_world (void *data, size_t capacity, size_t *len) {

@@ -139,6 +139,31 @@ static void test_chest_overrunning_count_rejected (void) {
   free(buffer);
 }
 
+// The platform may hand the snapshot to another task and write it later:
+// the buffer is the platform's after save_world, to free when it's done
+static void *saved_data = NULL;
+static size_t saved_len = 0;
+static int deferredSave (void *data, size_t len) {
+  saved_data = data;
+  saved_len = len;
+  return 0;
+}
+
+static void test_save_hands_buffer_to_platform (void) {
+  buildWorld();
+  BareironPlatform deferred = *bareiron_posix_platform();
+  deferred.save_world = deferredSave;
+  platform = &deferred;
+  CHECK(saveWorldNow() == 0);
+  CHECK(saved_data != NULL && saved_len == worldSnapshotSize());
+  // Still readable after saveWorldNow returned
+  WorldHeader header;
+  memcpy(&header, saved_data, sizeof(header));
+  CHECK(header.magic == WORLD_MAGIC);
+  platform->free_large(saved_data);
+  platform = bareiron_posix_platform();
+}
+
 int main (void) {
   // Saves land in the working directory; keep them out of the repository
   char dir[] = "/tmp/bareiron-test-XXXXXX";
@@ -151,5 +176,6 @@ int main (void) {
   RUN(test_online_player_marks_world_dirty);
   RUN(test_loaded_players_are_sanitized);
   RUN(test_chest_overrunning_count_rejected);
+  RUN(test_save_hands_buffer_to_platform);
   return CHECK_DONE();
 }

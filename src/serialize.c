@@ -113,8 +113,8 @@ int saveWorldNow (void) {
   uint8_t *buffer = platform->alloc_large(size);
   if (!buffer) return BAREIRON_ERR_NO_MEMORY;
   worldSnapshotWrite(buffer, size);
+  // From here on the buffer belongs to the platform
   int result = platform->save_world(buffer, size);
-  platform->free_large(buffer);
 
   last_save_time = get_program_time();
   if (result != 0) {
