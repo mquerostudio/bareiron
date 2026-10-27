@@ -20,6 +20,11 @@ extern const BareironPlatform *platform;
 // Even when offline, players who have logged on before take up a slot
 #define MAX_PLAYERS 64
 
+// Clients that send nothing for this long (in microseconds) are dropped.
+// Game clients send something every tick and answer a keep-alive every
+// second, so only a frozen or vanished client goes this quiet.
+#define CLIENT_TIMEOUT 20000000
+
 // How many clients may be connected at the same time
 #define MAX_CONNECTIONS BAREIRON_MAX_CONNECTIONS
 

@@ -162,6 +162,11 @@ static void handleClientPackets (int *client_slot) {
     disconnectClient(client_slot, 1);
     return;
   }
+  if (net_idle_us(client_fd) > CLIENT_TIMEOUT) {
+    printf("Client %d timed out\n", client_fd);
+    disconnectClient(client_slot, 11);
+    return;
+  }
 
   for (int n = 0; n < PACKETS_PER_ITERATION; n ++) {
     int length;

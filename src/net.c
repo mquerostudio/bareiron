@@ -8,6 +8,7 @@
 #endif
 
 #include "globals.h"
+#include "tools.h"
 #include "net.h"
 #include "miniz.h"
 
@@ -36,6 +37,8 @@ typedef struct {
   size_t packet_pos;
   // Packets of at least this many bytes get compressed, -1 = compression off
   int threshold;
+  // When the client last sent anything
+  int64_t last_rx_us;
 } NetClient;
 
 // Deflate and inflate state is big (~300 KB), so there's one of each,
@@ -108,6 +111,7 @@ int net_open (int fd) {
   memset(client, 0, sizeof(*client));
   client->fd = fd;
   client->threshold = -1;
+  client->last_rx_us = get_program_time();
   return 0;
 }
 
@@ -248,12 +252,19 @@ int net_pump (int fd) {
     ssize_t received = recv(fd, client->rx.data + client->rx.len, client->rx.cap - client->rx.len, MSG_DONTWAIT);
     if (received > 0) {
       client->rx.len += received;
+      client->last_rx_us = get_program_time();
       continue;
     }
     if (received == 0) return -1;
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) return 0;
     return -1;
   }
+}
+
+int64_t net_idle_us (int fd) {
+  NetClient *client = findClient(fd);
+  if (!client) return 0;
+  return get_program_time() - client->last_rx_us;
 }
 
 int net_next_packet (int fd, int *length) {
