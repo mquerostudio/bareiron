@@ -18,13 +18,13 @@ extern const BareironPlatform *platform;
 
 // How many players to keep in memory, NOT the amount of concurrent players
 // Even when offline, players who have logged on before take up a slot
-#define MAX_PLAYERS 16
+#define MAX_PLAYERS 64
 
 // How many clients may be connected at the same time
 #define MAX_CONNECTIONS 8
 
 // How many mobs to allocate memory for
-#define MAX_MOBS (MAX_PLAYERS)
+#define MAX_MOBS 16
 
 // Manhattan distance at which mobs despawn
 #define MOB_DESPAWN_DISTANCE 256

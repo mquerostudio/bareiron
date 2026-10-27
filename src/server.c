@@ -29,6 +29,7 @@
 #include "serialize.h"
 #include "dispatch.h"
 #include "net.h"
+#include "blockindex.h"
 
 static volatile int stop_requested = 0;
 
@@ -54,8 +55,8 @@ static void resetServerState (const BareironConfig *config) {
 
   memset(player_data, 0, sizeof(player_data));
   player_data_count = 0;
-  for (int i = 0; i < MAX_PLAYERS; i ++) {
-    player_data[i].client_fd = -1;
+  for (int i = 0; i < MAX_PLAYERS; i ++) player_data[i].client_fd = -1;
+  for (int i = 0; i < MAX_CONNECTIONS; i ++) {
     client_states[i * 2] = -1;
     client_states[i * 2 + 1] = 0;
   }
@@ -200,6 +201,11 @@ int bareiron_run (const BareironConfig *config) {
   block_changes_cap = config->max_block_changes;
   block_changes = platform->alloc_large(block_changes_cap * sizeof(BlockChange));
   if (!block_changes) return BAREIRON_ERR_NO_MEMORY;
+  if (bc_index_init(block_changes_cap)) {
+    platform->free_large(block_changes);
+    block_changes = NULL;
+    return BAREIRON_ERR_NO_MEMORY;
+  }
 
   resetServerState(config);
 
@@ -208,13 +214,16 @@ int bareiron_run (const BareironConfig *config) {
 
   // Start the disk/flash serializer (if applicable)
   if (initSerializer()) {
+    bc_index_free();
     platform->free_large(block_changes);
     block_changes = NULL;
     return BAREIRON_ERR_BAD_WORLD;
   }
+  bc_index_rebuild();
 
   int server_fd = openServerSocket(config->port);
   if (server_fd < 0) {
+    bc_index_free();
     platform->free_large(block_changes);
     block_changes = NULL;
     return server_fd;
@@ -261,6 +270,7 @@ int bareiron_run (const BareironConfig *config) {
   writePlayerDataToDisk();
   close(server_fd);
 
+  bc_index_free();
   platform->free_large(block_changes);
   block_changes = NULL;
 

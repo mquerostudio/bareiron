@@ -15,19 +15,20 @@
 #include "structures.h"
 #include "serialize.h"
 #include "procedures.h"
+#include "blockindex.h"
 #include "net.h"
 
-int client_states[MAX_PLAYERS * 2];
+int client_states[MAX_CONNECTIONS * 2];
 
 void setClientState (int client_fd, int new_state) {
   // Look for a client state with a matching file descriptor
-  for (int i = 0; i < MAX_PLAYERS * 2; i += 2) {
+  for (int i = 0; i < MAX_CONNECTIONS * 2; i += 2) {
     if (client_states[i] != client_fd) continue;
     client_states[i + 1] = new_state;
     return;
   }
   // If the above failed, look for an unused client state slot
-  for (int i = 0; i < MAX_PLAYERS * 2; i += 2) {
+  for (int i = 0; i < MAX_CONNECTIONS * 2; i += 2) {
     if (client_states[i] != -1) continue;
     client_states[i] = client_fd;
     client_states[i + 1] = new_state;
@@ -36,7 +37,7 @@ void setClientState (int client_fd, int new_state) {
 }
 
 int getClientState (int client_fd) {
-  for (int i = 0; i < MAX_PLAYERS * 2; i += 2) {
+  for (int i = 0; i < MAX_CONNECTIONS * 2; i += 2) {
     if (client_states[i] != client_fd) continue;
     return client_states[i + 1];
   }
@@ -44,7 +45,7 @@ int getClientState (int client_fd) {
 }
 
 int getClientIndex (int client_fd) {
-  for (int i = 0; i < MAX_PLAYERS * 2; i += 2) {
+  for (int i = 0; i < MAX_CONNECTIONS * 2; i += 2) {
     if (client_states[i] != client_fd) continue;
     return i;
   }
@@ -166,7 +167,7 @@ void handlePlayerDisconnect (int client_fd) {
     break;
   }
   // Find the client state entry and reset it
-  for (int i = 0; i < MAX_PLAYERS * 2; i += 2) {
+  for (int i = 0; i < MAX_CONNECTIONS * 2; i += 2) {
     if (client_states[i] == client_fd) {
       client_states[i] = -1;
       return;
@@ -480,19 +481,8 @@ void broadcastMobMetadata (int client_fd, int entity_id) {
 }
 
 uint8_t getBlockChange (short x, uint8_t y, short z) {
-  for (int i = 0; i < block_changes_count; i ++) {
-    if (block_changes[i].block == 0xFF) continue;
-    if (
-      block_changes[i].x == x &&
-      block_changes[i].y == y &&
-      block_changes[i].z == z
-    ) return block_changes[i].block;
-    #ifdef ALLOW_CHESTS
-      // Skip chest contents
-      if (block_changes[i].block == B_chest) i += 14;
-    #endif
-  }
-  return 0xFF;
+  int index = bc_find(x, y, z);
+  return index == -1 ? 0xFF : block_changes[index].block;
 }
 
 // Handle running out of memory for new block changes
@@ -536,50 +526,34 @@ uint8_t makeBlockChange (short x, uint8_t y, short z, uint8_t block) {
 
   uint8_t is_base_block = block == getTerrainAt(x, y, z, anchor);
 
-  // In the block_changes array, 0xFF indicates a missing/restored entry.
-  // We track the position of the first such "gap" for when the operation
-  // isn't replacing an existing block change.
-  int first_gap = block_changes_count;
-
-  // Prioritize replacing entries with matching coordinates
+  // Prioritize replacing an existing entry at these coordinates
   // This prevents having conflicting entries for one set of coordinates
-  for (int i = 0; i < block_changes_count; i ++) {
-    if (block_changes[i].block == 0xFF) {
-      if (first_gap == block_changes_count) first_gap = i;
-      continue;
-    }
-    if (
-      block_changes[i].x == x &&
-      block_changes[i].y == y &&
-      block_changes[i].z == z
-    ) {
-      #ifdef ALLOW_CHESTS
-      // When replacing chests, clear following 14 entries too (item data)
-      if (block_changes[i].block == B_chest) {
-        for (int j = 1; j < 15; j ++) block_changes[i + j].block = 0xFF;
+  int existing = bc_find(x, y, z);
+  if (existing != -1) {
+    #ifdef ALLOW_CHESTS
+    // When replacing chests, clear following 14 entries too (item data)
+    if (block_changes[existing].block == B_chest) {
+      for (int j = 1; j < 15; j ++) {
+        block_changes[existing + j].block = 0xFF;
+        bc_on_clear(existing + j);
       }
-      #endif
-      if (is_base_block) block_changes[i].block = 0xFF;
-      else {
-        #ifdef ALLOW_CHESTS
-        // When placing chests, just unallocate the target block and fall
-        // through to the chest-specific routine below.
-        if (block == B_chest) {
-          block_changes[i].block = 0xFF;
-          if (first_gap > i) first_gap = i;
-          #ifndef DISK_SYNC_BLOCKS_ON_INTERVAL
-          writeBlockChangesToDisk(i, i);
-          #endif
-          break;
-        }
-        #endif
-        block_changes[i].block = block;
-      }
-      #ifndef DISK_SYNC_BLOCKS_ON_INTERVAL
-      writeBlockChangesToDisk(i, i);
-      #endif
-      return 0;
     }
+    // When placing chests, just unallocate the target block and fall
+    // through to the chest-specific routine below.
+    uint8_t clear = is_base_block || block == B_chest;
+    #else
+    uint8_t clear = is_base_block;
+    #endif
+    if (clear) {
+      bc_on_clear(existing);
+      block_changes[existing].block = 0xFF;
+    } else {
+      block_changes[existing].block = block;
+    }
+    #ifndef DISK_SYNC_BLOCKS_ON_INTERVAL
+    writeBlockChangesToDisk(existing, existing);
+    #endif
+    if (!clear || is_base_block) return 0;
   }
 
   // Don't create a new entry if it contains the base terrain block
@@ -587,66 +561,42 @@ uint8_t makeBlockChange (short x, uint8_t y, short z, uint8_t block) {
 
   #ifdef ALLOW_CHESTS
   if (block == B_chest) {
-    // Chests require 15 entries total, so for maximum space-efficiency,
-    // we have to find a continuous gap that's at least 15 slots wide.
-    // By design, this loop also continues past the current search range,
-    // which naturally appends the chest to the end if a gap isn't found.
-    int last_real_entry = first_gap - 1;
-    for (int i = first_gap; i <= block_changes_count + 15; i ++) {
-      if (i >= (int)block_changes_cap) break; // No more space, trigger failBlockChange
-
-      if (block_changes[i].block != 0xFF) {
-        last_real_entry = i;
-        continue;
-      }
-      if (i - last_real_entry != 15) continue;
-      // A wide enough gap has been found, assign the chest
-      block_changes[last_real_entry + 1].x = x;
-      block_changes[last_real_entry + 1].y = y;
-      block_changes[last_real_entry + 1].z = z;
-      block_changes[last_real_entry + 1].block = block;
-      // Zero out the following 14 entries for item data
-      for (int i = 2; i <= 15; i ++) {
-        block_changes[last_real_entry + i].x = 0;
-        block_changes[last_real_entry + i].y = 0;
-        block_changes[last_real_entry + i].z = 0;
-        block_changes[last_real_entry + i].block = 0;
-      }
-      // Extend future search range if necessary
-      if (i >= block_changes_count) {
-        block_changes_count = i + 1;
-      }
-      // Write changes to disk (if applicable)
-      #ifndef DISK_SYNC_BLOCKS_ON_INTERVAL
-      writeBlockChangesToDisk(last_real_entry + 1, last_real_entry + 15);
-      #endif
-      return 0;
+    // Chests require 15 entries total: the chest itself and 14 entries
+    // of item data, so they need a continuous gap that's 15 slots wide
+    int start = bc_first_free(15);
+    if (start == -1) {
+      failBlockChange(x, y, z, block);
+      return 1;
     }
-    // If we're here, no changes were made
-    failBlockChange(x, y, z, block);
-    return 1;
+    block_changes[start] = (BlockChange){ .x = x, .z = z, .y = y, .block = block };
+    // Zero out the following 14 entries for item data
+    for (int i = 1; i < 15; i ++) {
+      block_changes[start + i] = (BlockChange){ 0 };
+    }
+    bc_on_set(start);
+    if (start + 15 > block_changes_count) block_changes_count = start + 15;
+    // Write changes to disk (if applicable)
+    #ifndef DISK_SYNC_BLOCKS_ON_INTERVAL
+    writeBlockChangesToDisk(start, start + 14);
+    #endif
+    return 0;
   }
   #endif
 
-  // Handle running out of memory for new block changes
-  if (first_gap == (int)block_changes_cap) {
+  // Store the change at the first free entry
+  int gap = bc_first_free(1);
+  if (gap == -1) {
     failBlockChange(x, y, z, block);
     return 1;
   }
-
-  // Fall back to storing the change at the first possible gap
-  block_changes[first_gap].x = x;
-  block_changes[first_gap].y = y;
-  block_changes[first_gap].z = z;
-  block_changes[first_gap].block = block;
+  block_changes[gap] = (BlockChange){ .x = x, .z = z, .y = y, .block = block };
+  bc_on_set(gap);
   // Write change to disk (if applicable)
   #ifndef DISK_SYNC_BLOCKS_ON_INTERVAL
-  writeBlockChangesToDisk(first_gap, first_gap);
+  writeBlockChangesToDisk(gap, gap);
   #endif
   // Extend future search range if we've appended to the end
-  if (first_gap == block_changes_count) {
-    block_changes_count ++;
-  }
+  if (gap >= block_changes_count) block_changes_count = gap + 1;
 
   return 0;
 }
@@ -1267,11 +1217,9 @@ void handlePlayerUseItem (PlayerData *player, short x, short y, short z, uint8_t
     else if (target == B_chest) {
       // Get a pointer to the entry following this chest in block_changes
       uint8_t *storage_ptr = NULL;
-      for (int i = 0; i < block_changes_count; i ++) {
-        if (block_changes[i].block != B_chest) continue;
-        if (block_changes[i].x != x || block_changes[i].y != y || block_changes[i].z != z) continue;
-        storage_ptr = (uint8_t *)(&block_changes[i + 1]);
-        break;
+      int chest = bc_find(x, y, z);
+      if (chest != -1 && block_changes[chest].block == B_chest) {
+        storage_ptr = (uint8_t *)(&block_changes[chest + 1]);
       }
       if (storage_ptr == NULL) return;
       // Terrible memory hack!!

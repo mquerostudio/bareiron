@@ -9,6 +9,7 @@
 #include "registries.h"
 #include "procedures.h"
 #include "worldgen.h"
+#include "blockindex.h"
 
 uint32_t getChunkHash (short x, short z) {
 
@@ -461,27 +462,26 @@ uint8_t buildChunkSection (int cx, int cy, int cz) {
   // This does mean that we're generating some terrain only to replace it,
   // but it's better to apply changes in one run rather than in individual
   // runs per block, as this is more expensive than terrain generation.
-  for (int i = 0; i < block_changes_count; i ++) {
-    if (block_changes[i].block == 0xFF) continue;
+  const int *indices;
+  int count = bc_column(div_floor(cx, 16), div_floor(cz, 16), &indices);
+  for (int n = 0; n < count; n ++) {
+    BlockChange *change = &block_changes[indices[n]];
+    if (change->block == 0xFF) continue;
     // Skip blocks that behave better when sent using a block update
-    if (block_changes[i].block == B_torch) continue;
+    if (change->block == B_torch) continue;
     #ifdef ALLOW_CHESTS
-      if (block_changes[i].block == B_chest) continue;
+      if (change->block == B_chest) continue;
     #endif
-    if ( // Check if block is within this chunk section
-      block_changes[i].x >= cx && block_changes[i].x < cx + 16 &&
-      block_changes[i].y >= cy && block_changes[i].y < cy + 16 &&
-      block_changes[i].z >= cz && block_changes[i].z < cz + 16
-    ) {
-      int dx = block_changes[i].x - cx;
-      int dy = block_changes[i].y - cy;
-      int dz = block_changes[i].z - cz;
-      // Same 8-block sequence reversal as before, this time 10x dirtier
-      // because we're working with specific indexes.
-      unsigned address = (unsigned)(dx + (dz << 4) + (dy << 8));
-      unsigned index = (address & ~7u) | (7u - (address & 7u));
-      chunk_section[index] = block_changes[i].block;
-    }
+    // Check if block is within this chunk section
+    if (change->y < cy || change->y >= cy + 16) continue;
+    int dx = change->x - cx;
+    int dy = change->y - cy;
+    int dz = change->z - cz;
+    // Same 8-block sequence reversal as before, this time 10x dirtier
+    // because we're working with specific indexes.
+    unsigned address = (unsigned)(dx + (dz << 4) + (dy << 8));
+    unsigned index = (address & ~7u) | (7u - (address & 7u));
+    chunk_section[index] = change->block;
   }
 
   return chunk_anchors[0].biome;

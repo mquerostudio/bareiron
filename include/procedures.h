@@ -5,7 +5,7 @@
 
 #include "globals.h"
 
-extern int client_states[MAX_PLAYERS * 2];
+extern int client_states[MAX_CONNECTIONS * 2];
 
 void setClientState (int client_fd, int new_state);
 int getClientState (int client_fd);
