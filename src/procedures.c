@@ -1608,6 +1608,8 @@ void handleServerTick (int64_t time_since_last_tick) {
         handlePlayerJoin(player);
       } else continue;
     }
+    // Position, health and inventory change all the time while playing
+    markWorldDirty();
     // Reset player attack cooldown
     if (player->flags & 0x01) {
       if (player->flagval_8 >= (uint8_t)(0.6f * TICKS_PER_SECOND)) {

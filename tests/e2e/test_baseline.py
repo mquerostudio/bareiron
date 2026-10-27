@@ -26,6 +26,7 @@ class BaselineTest(unittest.TestCase):
     with ServerProcess(PORT):
       info = Bot(port=PORT, name="pinger").status()
       self.assertEqual(info["version"]["protocol"], 772)
+      self.assertEqual(info["description"]["text"], "KodeCraft")
 
 
 if __name__ == "__main__":

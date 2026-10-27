@@ -32,6 +32,7 @@ size_t worldSnapshotWrite (uint8_t *dst, size_t capacity); // header + block_cha
 int    worldSnapshotRead (const uint8_t *src, size_t len);  // 0 ok, -5 bad magic/version/size
 
 void markWorldDirty (void);
+uint8_t worldIsDirty (void);
 int  saveWorldNow (void);       // snapshot into an alloc_large buffer, then platform->save_world
 void saveWorldIfDue (void);     // saves when dirty and WORLD_SAVE_INTERVAL has passed
 int  loadWorld (void);          // 0 loaded, 1 no saved world, -5 unreadable world

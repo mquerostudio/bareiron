@@ -1,6 +1,7 @@
 // World snapshots: header, block changes and player data
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "check.h"
 #include "globals.h"
@@ -86,10 +87,26 @@ static void test_truncated_rejected (void) {
   free(buffer);
 }
 
+// Players move, eat and pick things up all the time; while anyone is
+// online the world counts as changed, so the 60 s save keeps them
+static void test_online_player_marks_world_dirty (void) {
+  buildWorld();
+  player_data[0].flags = 0;
+  saveWorldIfDue(); // nothing to save yet
+  CHECK(!worldIsDirty());
+  handleServerTick(1000000);
+  CHECK(worldIsDirty());
+}
+
 int main (void) {
+  // Saves land in the working directory; keep them out of the repository
+  char dir[] = "/tmp/bareiron-test-XXXXXX";
+  CHECK(mkdtemp(dir) != NULL);
+  CHECK(chdir(dir) == 0);
   platform = bareiron_posix_platform();
   RUN(test_snapshot_roundtrip);
   RUN(test_bad_magic_rejected);
   RUN(test_truncated_rejected);
+  RUN(test_online_player_marks_world_dirty);
   return CHECK_DONE();
 }

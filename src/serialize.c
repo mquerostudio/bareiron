@@ -13,6 +13,10 @@ void markWorldDirty (void) {
   world_dirty = true;
 }
 
+uint8_t worldIsDirty (void) {
+  return world_dirty;
+}
+
 size_t worldSnapshotSize (void) {
   return sizeof(WorldHeader)
     + (size_t)block_changes_count * sizeof(BlockChange)
