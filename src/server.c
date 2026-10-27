@@ -15,6 +15,7 @@
   #else
     #include <sys/socket.h>
     #include <netinet/in.h>
+    #include <netinet/tcp.h>
     #include <arpa/inet.h>
   #endif
   #include <unistd.h>
@@ -27,6 +28,7 @@
 #include "procedures.h"
 #include "serialize.h"
 #include "dispatch.h"
+#include "net.h"
 
 static volatile int stop_requested = 0;
 
@@ -58,6 +60,17 @@ static void resetServerState (const BareironConfig *config) {
     client_states[i * 2 + 1] = 0;
   }
   memset(mob_data, 0, sizeof(mob_data));
+}
+
+// Sends whatever each client has queued, and drops clients whose
+// connection broke or who stopped reading (backlog over NET_TX_CAP)
+static void flushClients (int *clients) {
+  for (int i = 0; i < MAX_CONNECTIONS; i ++) {
+    if (clients[i] == -1) continue;
+    int result = net_flush(clients[i]);
+    if (result == -2) disconnectClient(&clients[i], 9);
+    else if (result < 0) disconnectClient(&clients[i], 10);
+  }
 }
 
 static void setNonBlocking (int fd) {
@@ -135,8 +148,8 @@ int bareiron_run (const BareironConfig *config) {
   }
 
   // Initialize all file descriptor references to -1 (unallocated)
-  int clients[MAX_PLAYERS], client_index = 0;
-  for (int i = 0; i < MAX_PLAYERS; i ++) clients[i] = -1;
+  int clients[MAX_CONNECTIONS], client_index = 0;
+  for (int i = 0; i < MAX_CONNECTIONS; i ++) clients[i] = -1;
 
   struct sockaddr_in client_addr;
   socklen_t addr_len = sizeof(client_addr);
@@ -153,21 +166,35 @@ int bareiron_run (const BareironConfig *config) {
     task_yield();
 
     // Attempt to accept a new connection
-    for (int i = 0; i < MAX_PLAYERS; i ++) {
+    for (int i = 0; i < MAX_CONNECTIONS; i ++) {
       if (clients[i] != -1) continue;
       clients[i] = accept(server_fd, (struct sockaddr *)&client_addr, &addr_len);
       // If the accept was successful, make the client non-blocking too
       if (clients[i] != -1) {
         printf("New client, fd: %d\n", clients[i]);
         setNonBlocking(clients[i]);
+        // Small packets (movement, keep-alive) shouldn't wait for Nagle
+        int nodelay = 1;
+        setsockopt(clients[i], IPPROTO_TCP, TCP_NODELAY, (const char *)&nodelay, sizeof(nodelay));
+        #ifdef SO_NOSIGPIPE
+        setsockopt(clients[i], SOL_SOCKET, SO_NOSIGPIPE, &nodelay, sizeof(nodelay));
+        #endif
+        if (net_open(clients[i])) {
+          close(clients[i]);
+          clients[i] = -1;
+          break;
+        }
         client_count ++;
       }
       break;
     }
 
+    // Send what's queued, even to clients that aren't sending anything
+    flushClients(clients);
+
     // Look for valid connected clients
     client_index ++;
-    if (client_index == MAX_PLAYERS) client_index = 0;
+    if (client_index == MAX_CONNECTIONS) client_index = 0;
     if (clients[client_index] == -1) continue;
 
     // Handle periodic events (server ticks)
@@ -175,6 +202,8 @@ int bareiron_run (const BareironConfig *config) {
     if (time_since_last_tick > TIME_BETWEEN_TICKS) {
       handleServerTick(time_since_last_tick);
       last_tick_time = get_program_time();
+      flushClients(clients);
+      if (clients[client_index] == -1) continue;
     }
 
     // Handle this individual client
@@ -231,11 +260,13 @@ int bareiron_run (const BareironConfig *config) {
       disconnectClient(&clients[client_index], 4);
       continue;
     }
+    flushClients(clients);
 
   }
 
   // Stop requested: drop every client, then release the port and memory
-  for (int i = 0; i < MAX_PLAYERS; i ++) {
+  flushClients(clients);
+  for (int i = 0; i < MAX_CONNECTIONS; i ++) {
     if (clients[i] != -1) disconnectClient(&clients[i], 8);
   }
   writePlayerDataToDisk();

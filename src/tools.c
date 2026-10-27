@@ -24,6 +24,7 @@
 #include "varnum.h"
 #include "procedures.h"
 #include "tools.h"
+#include "net.h"
 
 #ifndef htonll
   static uint64_t htonll (uint64_t value) {
@@ -88,50 +89,10 @@ ssize_t recv_all (int client_fd, void *buf, size_t n, uint8_t require_first) {
   return total; // got exactly n bytes
 }
 
+// Queues data for a client. The bytes leave in net_flush, called by the
+// server loop between packets, so this never blocks or disconnects.
 ssize_t send_all (int client_fd, const void *buf, ssize_t len) {
-  // Treat any input buffer as *uint8_t for simplicity
-  const uint8_t *p = (const uint8_t *)buf;
-  ssize_t sent = 0;
-
-  // Track time of last meaningful network update
-  // Used to handle timeout when client is stalling
-  int64_t last_update_time = get_program_time();
-
-  // Busy-wait (with task yielding) until all data has been sent
-  while (sent < len) {
-    #ifdef _WIN32
-      ssize_t n = send(client_fd, p + sent, len - sent, 0);
-    #else
-      ssize_t n = send(client_fd, p + sent, len - sent, MSG_NOSIGNAL);
-    #endif
-    if (n > 0) { // some data was sent, log it
-      sent += n;
-      last_update_time = get_program_time();
-      continue;
-    }
-    if (n == 0) { // connection was closed, treat this as an error
-      errno = ECONNRESET;
-      return -1;
-    }
-    // not yet ready to transmit, try again
-    #ifdef _WIN32 //handles windows socket timeout
-      int err = WSAGetLastError();
-      if (err == WSAEWOULDBLOCK || err == WSAEINTR) {
-    #else
-    if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
-    #endif
-      // handle network timeout
-      if (get_program_time() - last_update_time > NETWORK_TIMEOUT_TIME) {
-        disconnectClient(&client_fd, -2);
-        return -1;
-      }
-      task_yield();
-      continue;
-    }
-    return -1; // real error
-  }
-
-  return sent;
+  return net_write(client_fd, buf, len);
 }
 
 void discard_all (int client_fd, size_t remaining, uint8_t require_first) {

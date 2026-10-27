@@ -21,6 +21,11 @@ class BaselineTest(unittest.TestCase):
       self.assertEqual(bot.chunks_received, 25)
       self.assertGreater(bot.bytes_received, 3_000_000)
 
+  def test_status_ping_answers(self):
+    with ServerProcess(PORT):
+      info = Bot(port=PORT, name="pinger").status()
+      self.assertEqual(info["version"]["protocol"], 772)
+
 
 if __name__ == "__main__":
   unittest.main()

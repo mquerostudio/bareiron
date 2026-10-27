@@ -20,6 +20,9 @@ extern const BareironPlatform *platform;
 // Even when offline, players who have logged on before take up a slot
 #define MAX_PLAYERS 16
 
+// How many clients may be connected at the same time
+#define MAX_CONNECTIONS 8
+
 // How many mobs to allocate memory for
 #define MAX_MOBS (MAX_PLAYERS)
 
