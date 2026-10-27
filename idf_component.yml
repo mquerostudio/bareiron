@@ -1,0 +1,6 @@
+version: "0.1.0"
+description: "bareiron: minimalist Minecraft 1.21.8 server, as an ESP-IDF component (KodeCraft fork)"
+url: "https://github.com/mquerostudio/bareiron"
+license: "GPL-3.0-only"
+dependencies:
+  idf: ">=6.0"

@@ -4,6 +4,8 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include <unistd.h>
+
 #ifdef ESP_PLATFORM
   #include "lwip/sockets.h"
   #include "lwip/netdb.h"

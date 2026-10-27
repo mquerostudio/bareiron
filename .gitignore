@@ -6,3 +6,8 @@ src/registries.c
 include/registries.h
 *.bin
 build/
+tests/esp/build/
+tests/esp/sdkconfig
+tests/esp/sdkconfig.old
+tests/esp/managed_components/
+tests/esp/dependencies.lock

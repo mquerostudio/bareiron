@@ -526,8 +526,8 @@ uint8_t makeBlockChange (short x, uint8_t y, short z, uint8_t block) {
   // Since block changes get overlayed on top of terrain, we don't want to
   // store blocks that don't differ from the base terrain.
   ChunkAnchor anchor = {
-    x / CHUNK_SIZE,
-    z / CHUNK_SIZE
+    .x = x / CHUNK_SIZE,
+    .z = z / CHUNK_SIZE
   };
   if (x % CHUNK_SIZE < 0) anchor.x --;
   if (z % CHUNK_SIZE < 0) anchor.z --;

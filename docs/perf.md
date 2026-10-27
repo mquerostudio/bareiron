@@ -23,3 +23,11 @@ La peor vuelta coincide con la entrada de un jugador: los 25 chunks se generan y
 | Instantánea del mundo al guardar | cabecera + 6 B × cambios + 64 × 221 B |
 
 `player_data` (64 × 221 B = 14 KB) sigue siendo estático.
+
+## ESP32-P4 (ESP-IDF 6.1, `tests/esp`, -Og)
+
+| Componente | RAM interna (.bss + .data) | Flash (.text + .rodata) |
+|---|---:|---:|
+| `libbareiron.a` (núcleo + miniz) | 23 141 B (19 957 + 3 184) | 47 874 B |
+
+Las tablas de registros ya caben de sobra en RAM interna, así que no hace falta marcarlas `const`.
