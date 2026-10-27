@@ -5,7 +5,6 @@
 #ifdef ESP_PLATFORM
   #include "lwip/sockets.h"
   #include "lwip/netdb.h"
-  #include "esp_timer.h"
 #else
   #ifdef _WIN32
     #include <winsock2.h>
@@ -281,15 +280,3 @@ uint64_t splitmix64 (uint64_t state) {
   z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
   return z ^ (z >> 31);
 }
-
-#ifndef ESP_PLATFORM
-// Returns system time in microseconds.
-// On ESP-IDF, this is available in "esp_timer.h", and returns time *since
-// the start of the program*, and NOT wall clock time. To ensure
-// compatibility, this should only be used to measure time intervals.
-int64_t get_program_time () {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (int64_t)ts.tv_sec * 1000000LL + ts.tv_nsec / 1000LL;
-}
-#endif

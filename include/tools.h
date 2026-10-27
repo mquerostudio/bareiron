@@ -40,11 +40,6 @@ void readStringN (int client_fd, uint32_t max_length);
 uint32_t fast_rand ();
 uint64_t splitmix64 (uint64_t state);
 
-#ifdef ESP_PLATFORM
-  #include "esp_timer.h"
-  #define get_program_time esp_timer_get_time
-#else
-  int64_t get_program_time ();
-#endif
+#define get_program_time() platform->now_us()
 
 #endif

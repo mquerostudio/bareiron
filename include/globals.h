@@ -4,13 +4,11 @@
 #include <stdint.h>
 #include <unistd.h>
 
-#ifdef ESP_PLATFORM
-  #define WIFI_SSID "your-ssid"
-  #define WIFI_PASS "your-password"
-  void task_yield ();
-#else
-  #define task_yield();
-#endif
+#include "bareiron.h"
+
+// Platform hooks of the running server, set by bareiron_run
+extern const BareironPlatform *platform;
+#define task_yield() platform->yield()
 
 #define true 1
 #define false 0
@@ -70,8 +68,8 @@
 // Must be at least 1, otherwise chunks will be sent on each position update
 #define VISITED_HISTORY 4
 
-// How many player-made block changes to allow
-// Determines the fixed amount of memory allocated to blocks
+// Default amount of player-made block changes to allow on PC builds.
+// Embedded hosts pass their own capacity in BareironConfig.
 #define MAX_BLOCK_CHANGES 20000
 
 // If defined, writes and reads world data to/from disk (or flash).
@@ -265,7 +263,8 @@ typedef struct {
   union EntityDataValue value;
 } EntityData;
 
-extern BlockChange block_changes[MAX_BLOCK_CHANGES];
+extern BlockChange *block_changes;
+extern uint32_t block_changes_cap;
 extern int block_changes_count;
 
 extern PlayerData player_data[MAX_PLAYERS];

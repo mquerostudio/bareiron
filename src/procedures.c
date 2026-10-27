@@ -589,7 +589,7 @@ uint8_t makeBlockChange (short x, uint8_t y, short z, uint8_t block) {
     // which naturally appends the chest to the end if a gap isn't found.
     int last_real_entry = first_gap - 1;
     for (int i = first_gap; i <= block_changes_count + 15; i ++) {
-      if (i >= MAX_BLOCK_CHANGES) break; // No more space, trigger failBlockChange
+      if (i >= (int)block_changes_cap) break; // No more space, trigger failBlockChange
 
       if (block_changes[i].block != 0xFF) {
         last_real_entry = i;
@@ -625,7 +625,7 @@ uint8_t makeBlockChange (short x, uint8_t y, short z, uint8_t block) {
   #endif
 
   // Handle running out of memory for new block changes
-  if (first_gap == MAX_BLOCK_CHANGES) {
+  if (first_gap == (int)block_changes_cap) {
     failBlockChange(x, y, z, block);
     return 1;
   }
