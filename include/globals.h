@@ -98,11 +98,6 @@ extern const BareironPlatform *platform;
 // be necessary.
 // #define DISK_SYNC_BLOCKS_ON_INTERVAL
 
-// Time in microseconds to spend waiting for data transmission before
-// timing out. Default is 15s, which leaves 5s to prevent starving other
-// clients from Keep Alive packets.
-#define NETWORK_TIMEOUT_TIME 15000000
-
 // Size of the receive buffer for incoming string data
 #define MAX_RECV_BUF_LEN 256
 

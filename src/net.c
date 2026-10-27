@@ -28,6 +28,11 @@ typedef struct {
   // Whole frames waiting for the socket, sent from `wire_off` onwards
   NetBuffer wire;
   size_t wire_off;
+  // Raw bytes read from the socket, not yet split into packets
+  NetBuffer rx;
+  // The packet being handled, read from `packet_pos` onwards
+  NetBuffer packet;
+  size_t packet_pos;
 } NetClient;
 
 static NetClient net_clients[MAX_CONNECTIONS] = { [0 ... MAX_CONNECTIONS - 1] = { .fd = -1 } };
@@ -101,6 +106,8 @@ void net_close (int fd) {
   if (!client) return;
   freeBuffer(&client->plain);
   freeBuffer(&client->wire);
+  freeBuffer(&client->rx);
+  freeBuffer(&client->packet);
   client->fd = -1;
 }
 
@@ -159,4 +166,59 @@ size_t net_pending (int fd) {
   NetClient *client = findClient(fd);
   if (!client) return 0;
   return client->wire.len - client->wire_off;
+}
+
+int net_pump (int fd) {
+  NetClient *client = findClient(fd);
+  if (!client) return -1;
+  while (true) {
+    // Don't let a client flood memory: stop reading once a full packet
+    // of the largest size is already waiting
+    if (client->rx.len > NET_MAX_PACKET + 8) return 0;
+    if (reserveBuffer(&client->rx, 4096)) return -1;
+    ssize_t received = recv(fd, client->rx.data + client->rx.len, client->rx.cap - client->rx.len, MSG_DONTWAIT);
+    if (received > 0) {
+      client->rx.len += received;
+      continue;
+    }
+    if (received == 0) return -1;
+    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) return 0;
+    return -1;
+  }
+}
+
+int net_next_packet (int fd, int *length) {
+  NetClient *client = findClient(fd);
+  if (!client) return -1;
+
+  uint32_t frame_length;
+  int size = peekVarInt(client->rx.data, client->rx.len, &frame_length);
+  if (size < 0 || frame_length > NET_MAX_PACKET) return -1;
+  if (size == 0 || client->rx.len < size + frame_length) return 0;
+
+  client->packet.len = 0;
+  client->packet_pos = 0;
+  if (appendBuffer(&client->packet, client->rx.data + size, frame_length)) return -1;
+  consumeBuffer(&client->rx, size + frame_length);
+
+  *length = frame_length;
+  return 1;
+}
+
+ssize_t net_read (int fd, void *buf, size_t n) {
+  NetClient *client = findClient(fd);
+  if (!client) return -1;
+  size_t left = client->packet.len - client->packet_pos;
+  if (n > left) n = left;
+  if (n == 0) return 0;
+  memcpy(buf, client->packet.data + client->packet_pos, n);
+  client->packet_pos += n;
+  return n;
+}
+
+void net_finish_packet (int fd) {
+  NetClient *client = findClient(fd);
+  if (!client) return;
+  client->packet.len = 0;
+  client->packet_pos = 0;
 }

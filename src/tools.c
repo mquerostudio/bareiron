@@ -41,52 +41,14 @@
 // Helps notice misread packets and clean up after errors
 uint64_t total_bytes_received = 0;
 
+// Reads from the packet that is being handled. The whole packet is
+// already in memory, so this never waits: it returns fewer than `n`
+// bytes once the packet runs out.
 ssize_t recv_all (int client_fd, void *buf, size_t n, uint8_t require_first) {
-  char *p = buf;
-  size_t total = 0;
-
-  // Track time of last meaningful network update
-  // Used to handle timeout when client is stalling
-  int64_t last_update_time = get_program_time();
-
-  // If requested, exit early when first byte not immediately available
-  if (require_first) {
-    ssize_t r = recv(client_fd, p, 1, MSG_PEEK);
-    if (r <= 0) {
-      if (r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-        return 0; // no first byte available yet
-      }
-      return -1; // error or connection closed
-    }
-  }
-
-  // Busy-wait (with task yielding) until we get exactly n bytes
-  while (total < n) {
-    ssize_t r = recv(client_fd, p + total, n - total, 0);
-    if (r < 0) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        // handle network timeout
-        if (get_program_time() - last_update_time > NETWORK_TIMEOUT_TIME) {
-          disconnectClient(&client_fd, -1);
-          return -1;
-        }
-        task_yield();
-        continue;
-      } else {
-        total_bytes_received += total;
-        return -1; // real error
-      }
-    } else if (r == 0) {
-      // connection closed before full read
-      total_bytes_received += total;
-      return total;
-    }
-    total += r;
-    last_update_time = get_program_time();
-  }
-
-  total_bytes_received += total;
-  return total; // got exactly n bytes
+  (void)require_first;
+  ssize_t received = net_read(client_fd, buf, n);
+  if (received > 0) total_bytes_received += received;
+  return received;
 }
 
 // Queues data for a client. The bytes leave in net_flush, called by the
@@ -99,7 +61,7 @@ void discard_all (int client_fd, size_t remaining, uint8_t require_first) {
   while (remaining > 0) {
     size_t recv_n = remaining > MAX_RECV_BUF_LEN ? MAX_RECV_BUF_LEN : remaining;
     ssize_t received = recv_all(client_fd, recv_buffer, recv_n, require_first);
-    if (received < 0) return;
+    if (received <= 0) return;
     if (received > remaining) return;
     remaining -= received;
     require_first = false;
@@ -192,8 +154,8 @@ double readDouble (int client_fd) {
 ssize_t readLengthPrefixedData (int client_fd) {
   uint32_t length = readVarInt(client_fd);
   if (length >= MAX_RECV_BUF_LEN) {
-    printf("ERROR: Received length (%lu) exceeds maximum (%u)\n", length, MAX_RECV_BUF_LEN);
-    disconnectClient(&client_fd, -1);
+    printf("ERROR: Received length (%u) exceeds maximum (%u)\n", length, MAX_RECV_BUF_LEN);
+    // The server loop disconnects clients that leave recv_count at 0
     recv_count = 0;
     return 0;
   }
