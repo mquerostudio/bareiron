@@ -39,7 +39,15 @@ typedef struct {
   int threshold;
   // When the client last sent anything
   int64_t last_rx_us;
+  // Set when data couldn't be queued: the stream is corrupt from there on
+  uint8_t broken;
 } NetClient;
+
+// Raw packets are framed (and compressed) once this many bytes pile up,
+// so a join's ~3.6 MB of chunks never sits in memory uncompressed
+#define NET_FRAME_EARLY (64u * 1024)
+// Buffers bigger than this are given back once they're empty
+#define NET_KEEP_CAPACITY (64u * 1024)
 
 // Deflate and inflate state is big (~300 KB), so there's one of each,
 // shared by all clients and allocated on first use
@@ -125,11 +133,25 @@ void net_close (int fd) {
   client->fd = -1;
 }
 
+static int frameOutgoing (NetClient *client);
+
 ssize_t net_write (int fd, const void *buf, size_t len) {
   NetClient *client = findClient(fd);
-  if (!client) return -1;
-  if (appendBuffer(&client->plain, buf, len)) return -1;
+  if (!client || client->broken) return -1;
+  if (appendBuffer(&client->plain, buf, len)) {
+    client->broken = true;
+    return -1;
+  }
+  if (client->plain.len >= NET_FRAME_EARLY && frameOutgoing(client)) {
+    client->broken = true;
+    return -1;
+  }
   return len;
+}
+
+// Gives back the memory of an empty buffer that grew large
+static void shrinkBuffer (NetBuffer *buffer) {
+  if (buffer->len == 0 && buffer->cap > NET_KEEP_CAPACITY) freeBuffer(buffer);
 }
 
 static int appendVarInt (NetBuffer *buffer, uint32_t value) {
@@ -209,7 +231,11 @@ void net_enable_compression (int fd, int threshold) {
 int net_flush (int fd) {
   NetClient *client = findClient(fd);
   if (!client) return 0;
-  if (frameOutgoing(client)) return -2;
+  if (client->broken) return -1;
+  if (frameOutgoing(client)) {
+    client->broken = true;
+    return -1;
+  }
 
   // Send as much as the socket takes right now, keep the rest for later
   while (client->wire_off < client->wire.len) {
@@ -226,6 +252,8 @@ int net_flush (int fd) {
   // Compact the wire buffer once everything before wire_off is gone
   if (client->wire_off == client->wire.len) {
     client->wire.len = client->wire_off = 0;
+    shrinkBuffer(&client->wire);
+    shrinkBuffer(&client->plain);
   } else if (client->wire_off > client->wire.cap / 2) {
     consumeBuffer(&client->wire, client->wire_off);
     client->wire_off = 0;
@@ -233,6 +261,12 @@ int net_flush (int fd) {
 
   if (client->wire.len - client->wire_off + client->plain.len > NET_TX_CAP) return -2;
   return 0;
+}
+
+size_t net_memory (int fd) {
+  NetClient *client = findClient(fd);
+  if (!client) return 0;
+  return client->plain.cap + client->wire.cap + client->rx.cap + client->packet.cap;
 }
 
 size_t net_pending (int fd) {
@@ -326,4 +360,6 @@ void net_finish_packet (int fd) {
   if (!client) return;
   client->packet.len = 0;
   client->packet_pos = 0;
+  shrinkBuffer(&client->packet);
+  shrinkBuffer(&client->rx);
 }

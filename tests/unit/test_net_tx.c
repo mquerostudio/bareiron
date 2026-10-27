@@ -78,10 +78,69 @@ static void test_peer_not_reading_hits_cap (void) {
   close(peer);
 }
 
+// A join writes ~3.6 MB of chunk packets in one go. Frames must be
+// compressed as they're written, not held raw until the next flush, and
+// the buffers must shrink back once the burst has gone out.
+static void test_join_burst_stays_small (void) {
+  int server, peer;
+  makePair(&server, &peer);
+  CHECK(net_open(server) == 0);
+  net_enable_compression(server, 256);
+
+  static uint8_t frame[3 + 140000];
+  frame[0] = 0xE0; frame[1] = 0xA5; frame[2] = 0x08; // 140000
+  for (size_t i = 3; i < sizeof(frame); i ++) frame[i] = (i % 4096) < 2048 ? 1 : (uint8_t)(i / 4096);
+  for (int i = 0; i < 25; i ++) CHECK(net_write(server, frame, sizeof(frame)) == (ssize_t)sizeof(frame));
+  printf("  buffers after burst: %zu bytes\n", net_memory(server));
+  CHECK(net_memory(server) < 1024 * 1024);
+
+  // Drain everything, then the buffers give their memory back
+  uint8_t sink[65536];
+  for (int i = 0; i < 100000 && (net_pending(server) || net_memory(server) > 65536); i ++) {
+    CHECK(net_flush(server) == 0);
+    while (recv(peer, sink, sizeof(sink), 0) > 0);
+  }
+  printf("  buffers after drain: %zu bytes\n", net_memory(server));
+  CHECK(net_memory(server) <= 65536);
+
+  net_close(server);
+  close(server);
+  close(peer);
+}
+
+// When memory runs out mid-packet the stream is broken: the client must
+// be dropped, never sent half a packet
+static int fail_allocations = 0;
+static void *failingAlloc (size_t size) { return fail_allocations ? NULL : malloc(size); }
+
+static void test_failed_allocation_drops_client (void) {
+  BareironPlatform failing = *bareiron_posix_platform();
+  failing.alloc_large = failingAlloc;
+  platform = &failing;
+
+  int server, peer;
+  makePair(&server, &peer);
+  CHECK(net_open(server) == 0);
+  uint8_t small[3] = { 0x02, 0x26, 0x01 };
+  CHECK(net_write(server, small, 3) == 3);
+  fail_allocations = 1;
+  static uint8_t big[8192];
+  CHECK(net_write(server, big, sizeof(big)) == -1);
+  CHECK(net_flush(server) == -1);
+  fail_allocations = 0;
+
+  net_close(server);
+  close(server);
+  close(peer);
+  platform = bareiron_posix_platform();
+}
+
 int main (void) {
   platform = bareiron_posix_platform();
   RUN(test_write_is_buffered_until_flush);
   RUN(test_unknown_fd_is_ignored);
   RUN(test_peer_not_reading_hits_cap);
+  RUN(test_join_burst_stays_small);
+  RUN(test_failed_allocation_drops_client);
   return CHECK_DONE();
 }

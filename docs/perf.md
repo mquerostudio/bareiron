@@ -19,7 +19,7 @@ La peor vuelta coincide con la entrada de un jugador: los 25 chunks se generan y
 | Compresor deflate (`tdefl_compressor`) | 319 352 B, uno compartido |
 | Descompresor inflate (`tinfl_decompressor`) | 8 376 B, uno compartido |
 | Índice de columnas | 1024 columnas × 24 B al empezar, crece ×2 |
-| Búferes de red por cliente | 4 KB al empezar, crecen ×2 (≈ 64-256 KB durante una entrada) |
+| Búferes de red por cliente | 4 KB al empezar; pico medido de 512 KB durante la entrada de un jugador (los paquetes se comprimen a medida que se escriben); se liberan al vaciarse |
 | Instantánea del mundo al guardar | cabecera + 6 B × cambios + 64 × 221 B |
 
 `player_data` (64 × 221 B = 14 KB) sigue siendo estático.

@@ -19,6 +19,7 @@ void    net_close (int fd);                // frees buffers; closes nothing
 ssize_t net_write (int fd, const void *buf, size_t len); // appends; returns len, or -1 if fd unknown
 int     net_flush (int fd);                // frame + non-blocking send; 0 ok, -1 peer gone, -2 over NET_TX_CAP
 size_t  net_pending (int fd);              // bytes waiting in the wire buffer
+size_t  net_memory (int fd);               // bytes of buffer memory the client holds
 
 int     net_pump (int fd);                         // read what's available; 0 ok, -1 peer gone/error
 int64_t net_idle_us (int fd);                      // time since the client last sent anything
