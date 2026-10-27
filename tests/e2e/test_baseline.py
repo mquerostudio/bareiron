@@ -1,0 +1,26 @@
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.dirname(__file__))
+from mcbot import Bot  # noqa: E402
+from server import ServerProcess  # noqa: E402
+
+PORT = 25565
+
+
+class BaselineTest(unittest.TestCase):
+
+  def test_baseline_join(self):
+    with ServerProcess(PORT) as server:
+      bot = Bot(port=PORT, name="baseline")
+      bot.login()
+      bot.play_for(5)
+      print("\nbytes_received=%d chunks_received=%d" % (bot.bytes_received, bot.chunks_received))
+      bot.close()
+      self.assertEqual(bot.chunks_received, 25)
+      self.assertGreater(bot.bytes_received, 3_000_000)
+
+
+if __name__ == "__main__":
+  unittest.main()
