@@ -24,22 +24,30 @@
 #include "procedures.h"
 #include "packets.h"
 #include "net.h"
+#include "status.h"
 
 // S->C Status Response (server list ping)
 int sc_statusResponse (int client_fd) {
 
+  // The player count is the only part that changes between responses
+  char players[64];
+  int players_len = snprintf(players, sizeof(players),
+    "\"players\":{\"max\":%d,\"online\":%d},", MAX_CONNECTIONS, statusPlayersOnline());
+
   char header[] = "{"
-    "\"version\":{\"name\":\"1.21.8\",\"protocol\":772},"
-    "\"description\":{\"text\":\"";
+    "\"version\":{\"name\":\"1.21.8\",\"protocol\":772},";
+  char description[] = "\"description\":{\"text\":\"";
   char footer[] = "\"}}";
 
-  uint16_t string_len = sizeof(header) + sizeof(footer) + motd_len - 2;
+  uint16_t string_len = sizeof(header) - 1 + players_len + sizeof(description) - 1 + motd_len + sizeof(footer) - 1;
 
   writeVarInt(client_fd, 1 + string_len + sizeVarInt(string_len));
   writeByte(client_fd, 0x00);
 
   writeVarInt(client_fd, string_len);
   send_all(client_fd, header, sizeof(header) - 1);
+  send_all(client_fd, players, players_len);
+  send_all(client_fd, description, sizeof(description) - 1);
   send_all(client_fd, motd, motd_len);
   send_all(client_fd, footer, sizeof(footer) - 1);
 

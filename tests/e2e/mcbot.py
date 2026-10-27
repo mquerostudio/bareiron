@@ -89,6 +89,7 @@ class Bot:
     self.chunks_received = 0
     self.keep_alives = []        # monotonic timestamps of received keep-alives
     self.position = None         # last (x, y, z) sent by the server
+    self.loaded = False
     self.state = "none"
 
   # -- transport --------------------------------------------------------
@@ -212,7 +213,10 @@ class Bot:
         x, y, z = struct.unpack(">ddd", payload[pos:pos + 24])
         self.position = (x, y, z)
         self.send(SB_PLAY_CONFIRM_TELEPORT, varint(teleport_id))
-        self.send(SB_PLAY_PLAYER_LOADED)
+        if not self.loaded:
+          # Like the vanilla client: once, when the world first shows
+          self.send(SB_PLAY_PLAYER_LOADED)
+          self.loaded = True
       elif packet_id == PLAY_DISCONNECT:
         raise Disconnected(self.name + ": kicked")
 

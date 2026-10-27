@@ -16,6 +16,7 @@
 #include "serialize.h"
 #include "procedures.h"
 #include "blockindex.h"
+#include "status.h"
 #include "net.h"
 
 int client_states[MAX_CONNECTIONS * 2];
@@ -149,6 +150,8 @@ void handlePlayerDisconnect (int client_fd) {
   // Search for a corresponding player in the player data array
   for (int i = 0; i < MAX_PLAYERS; i ++) {
     if (player_data[i].client_fd != client_fd) continue;
+    // Only players that made it into the game count as leaving it
+    uint8_t was_in_game = !(player_data[i].flags & 0x20);
     // Mark the player as being offline
     player_data[i].client_fd = -1;
     // Prepare leave message for broadcast
@@ -164,6 +167,7 @@ void handlePlayerDisconnect (int client_fd) {
       // Remove leaving player's entity
       sc_removeEntity(player_data[j].client_fd, client_fd);
     }
+    if (was_in_game) statusPlayerLeft(&player_data[i]);
     break;
   }
   // Find the client state entry and reset it
@@ -177,6 +181,10 @@ void handlePlayerDisconnect (int client_fd) {
 
 // Marks a client as connected and broadcasts their data to other players
 void handlePlayerJoin (PlayerData* player) {
+
+  // Clients also report "loaded" after respawning; only the first one
+  // after logging in is a join for the host
+  uint8_t was_loading = player->flags & 0x20;
 
   // Prepare join message for broadcast
   uint8_t player_name_len = strlen(player->name);
@@ -195,6 +203,8 @@ void handlePlayerJoin (PlayerData* player) {
   // Clear "client loading" flag and fallback timer
   player->flags &= ~0x20;
   player->flagval_16 = 0;
+
+  if (was_loading) statusPlayerJoined(player);
 
 }
 

@@ -42,6 +42,27 @@ typedef struct {
   const BareironPlatform *platform;
 } BareironConfig;
 
+// Most clients that can be connected at once
+#define BAREIRON_MAX_CONNECTIONS 8
+
+typedef struct {
+  char name[16];
+  short x;
+  uint8_t y;
+  short z;
+  int64_t joined_us;
+} BareironPlayerInfo;
+
+typedef struct {
+  uint8_t  running;
+  uint8_t  player_count;                         // players in game (not status pings)
+  BareironPlayerInfo players[BAREIRON_MAX_CONNECTIONS];
+  uint16_t world_time;                           // 0..23999
+  int64_t  started_us;
+  uint32_t loop_max_us;                          // worst loop iteration in the last second
+  uint32_t block_changes_used;
+} BareironStatus;
+
 // Error codes returned by bareiron_run
 #define BAREIRON_ERR_SOCKET -1
 #define BAREIRON_ERR_BIND -2
@@ -57,6 +78,9 @@ int bareiron_run (const BareironConfig *config);
 // Asks a running server to stop. Safe to call from any thread; the
 // server returns from bareiron_run within a second.
 void bareiron_request_stop (void);
+
+// Copies the latest server status. Safe to call from any thread.
+void bareiron_get_status (BareironStatus *out);
 
 // Platform implementation for POSIX systems (macOS, Linux)
 const BareironPlatform *bareiron_posix_platform (void);

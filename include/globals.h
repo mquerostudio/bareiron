@@ -21,7 +21,7 @@ extern const BareironPlatform *platform;
 #define MAX_PLAYERS 64
 
 // How many clients may be connected at the same time
-#define MAX_CONNECTIONS 8
+#define MAX_CONNECTIONS BAREIRON_MAX_CONNECTIONS
 
 // How many mobs to allocate memory for
 #define MAX_MOBS 16

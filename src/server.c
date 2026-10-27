@@ -30,6 +30,7 @@
 #include "dispatch.h"
 #include "net.h"
 #include "blockindex.h"
+#include "status.h"
 
 static volatile int stop_requested = 0;
 
@@ -208,6 +209,7 @@ int bareiron_run (const BareironConfig *config) {
   }
 
   resetServerState(config);
+  statusReset();
 
   printf("World seed (hashed): %08X\n", (unsigned int)world_seed);
   printf("RNG seed (hashed): %08X\n\n", (unsigned int)rng_seed);
@@ -233,8 +235,14 @@ int bareiron_run (const BareironConfig *config) {
   int clients[MAX_CONNECTIONS];
   for (int i = 0; i < MAX_CONNECTIONS; i ++) clients[i] = -1;
 
+  statusSetRunning(true);
+  statusEmit(BAREIRON_EVT_READY, NULL, config->port);
+
   // Track time of last server tick (in microseconds)
   int64_t last_tick_time = get_program_time();
+  // Worst loop iteration since the last status update
+  int64_t last_status_time = last_tick_time;
+  uint32_t loop_max_us = 0;
 
   /**
    * Each iteration accepts at most one new connection, runs the server
@@ -243,6 +251,7 @@ int bareiron_run (const BareironConfig *config) {
    */
   while (!stop_requested) {
     task_yield();
+    int64_t loop_start = get_program_time();
 
     acceptClient(server_fd, clients);
 
@@ -260,6 +269,14 @@ int bareiron_run (const BareironConfig *config) {
 
     // Send what's queued, including packets for clients that sent nothing
     flushClients(clients);
+
+    int64_t loop_end = get_program_time();
+    if (loop_end - loop_start > loop_max_us) loop_max_us = loop_end - loop_start;
+    if (loop_end - last_status_time >= 1000000) {
+      statusUpdate(loop_max_us);
+      loop_max_us = 0;
+      last_status_time = loop_end;
+    }
   }
 
   // Stop requested: drop every client, then release the port and memory
@@ -274,6 +291,8 @@ int bareiron_run (const BareironConfig *config) {
   platform->free_large(block_changes);
   block_changes = NULL;
 
+  statusSetRunning(false);
   printf("Server closed.\n");
+  statusEmit(BAREIRON_EVT_STOPPED, NULL, 0);
   return 0;
 }
