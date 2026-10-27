@@ -75,28 +75,9 @@ extern const BareironPlatform *platform;
 // Embedded hosts pass their own capacity in BareironConfig.
 #define MAX_BLOCK_CHANGES 20000
 
-// If defined, writes and reads world data to/from disk (or flash).
-// This is a synchronous operation, and can cause performance issues if
-// frequent random disk access is slow. Data is still stored in and
-// accessed from memory - reading from disk is only done on startup.
-// When targeting ESP-IDF, LittleFS is used to manage flash reads and
-// writes. Flash is typically *very* slow and unreliable, which is why
-// this option is disabled by default when targeting ESP-IDF.
-#ifndef ESP_PLATFORM
-  #define SYNC_WORLD_TO_DISK
-#endif
-
-// The minimum interval (in microseconds) at which certain data is written
-// to disk/flash. Bounded on the low end by TIME_BETWEEN_TICKS. By default,
-// applies only to player data. Block changes are written as soon as they
-// are made, but in much smaller portions. Set DISK_SYNC_BLOCKS_ON_INTERVAL
-// to make this apply to block changes as well.
-#define DISK_SYNC_INTERVAL 15000000
-
-// Whether to sync block changes to disk on an interval, instead of syncing
-// on each change. On systems with fast random disk access, this shouldn't
-// be necessary.
-// #define DISK_SYNC_BLOCKS_ON_INTERVAL
+// How often (in microseconds) a changed world is saved through the
+// platform's save_world hook. It's also saved whenever the server stops.
+#define WORLD_SAVE_INTERVAL 60000000
 
 // If defined, compresses packets of at least COMPRESSION_THRESHOLD bytes.
 // Chunk data shrinks several times over, which matters most on weak links.
@@ -157,11 +138,6 @@ extern const BareironPlatform *platform;
 
 // If defined, log chunk generation events
 // #define DEV_LOG_CHUNK_GENERATION
-
-// If defined, allows dumping world data by sending 0xBEEF (big-endian),
-// and uploading world data by sending 0xFEED, followed by the data buffer.
-// Doesn't implement authentication, hence disabled by default.
-// #define DEV_ENABLE_BEEF_DUMPS
 
 #define STATE_NONE 0
 #define STATE_STATUS 1

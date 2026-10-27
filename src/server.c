@@ -211,15 +211,14 @@ int bareiron_run (const BareironConfig *config) {
   resetServerState(config);
   statusReset();
 
-  printf("World seed (hashed): %08X\n", (unsigned int)world_seed);
-  printf("RNG seed (hashed): %08X\n\n", (unsigned int)rng_seed);
 
-  // Start the disk/flash serializer (if applicable)
-  if (initSerializer()) {
+  // Pick up the saved world, if there is one
+  int loaded = loadWorld();
+  if (loaded < 0) {
     bc_index_free();
     platform->free_large(block_changes);
     block_changes = NULL;
-    return BAREIRON_ERR_BAD_WORLD;
+    return loaded;
   }
   bc_index_rebuild();
 
@@ -284,7 +283,7 @@ int bareiron_run (const BareironConfig *config) {
   for (int i = 0; i < MAX_CONNECTIONS; i ++) {
     if (clients[i] != -1) disconnectClient(&clients[i], 8);
   }
-  writePlayerDataToDisk();
+  saveWorldNow();
   close(server_fd);
 
   bc_index_free();

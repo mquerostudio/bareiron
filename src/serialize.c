@@ -1,215 +1,137 @@
+#include <stdio.h>
+#include <string.h>
+
 #include "globals.h"
-
-#ifdef SYNC_WORLD_TO_DISK
-
-#ifdef ESP_PLATFORM
-  #include "esp_littlefs.h"
-  #define FILE_PATH "/littlefs/world.bin"
-#else
-  #include <stdio.h>
-  #define FILE_PATH "world.bin"
-#endif
-
 #include "tools.h"
-#include "registries.h"
+#include "status.h"
 #include "serialize.h"
 
-int64_t last_disk_sync_time = 0;
+static uint8_t world_dirty = false;
+static int64_t last_save_time = 0;
 
-// Restores world data from disk, or writes world file if it doesn't exist
-int initSerializer () {
+void markWorldDirty (void) {
+  world_dirty = true;
+}
 
-  last_disk_sync_time = get_program_time();
+size_t worldSnapshotSize (void) {
+  return sizeof(WorldHeader)
+    + (size_t)block_changes_count * sizeof(BlockChange)
+    + MAX_PLAYERS * sizeof(PlayerData);
+}
 
-  #ifdef ESP_PLATFORM
-    esp_vfs_littlefs_conf_t conf = {
-      .base_path = "/littlefs",
-      .partition_label = "littlefs",
-      .format_if_mount_failed = true,
-      .dont_mount = false
-    };
+size_t worldSnapshotWrite (uint8_t *dst, size_t capacity) {
+  size_t size = worldSnapshotSize();
+  if (capacity < size) return 0;
 
-    esp_err_t ret = esp_vfs_littlefs_register(&conf);
-    if (ret != ESP_OK) {
-      printf("LittleFS error %d\n", ret);
-      perror("Failed to mount LittleFS. Aborting.");
-      return 1;
-    }
-  #endif
+  WorldHeader header = {
+    .magic = WORLD_MAGIC,
+    .version = WORLD_VERSION,
+    .world_seed = world_seed,
+    .block_changes_count = block_changes_count,
+    .player_count = MAX_PLAYERS,
+    .player_size = sizeof(PlayerData),
+    .world_time = world_time
+  };
+  memcpy(dst, &header, sizeof(header));
+  dst += sizeof(header);
 
-  // Attempt to open existing world file
-  FILE *file = fopen(FILE_PATH, "rb");
-  if (file) {
+  memcpy(dst, block_changes, (size_t)block_changes_count * sizeof(BlockChange));
+  dst += (size_t)block_changes_count * sizeof(BlockChange);
 
-    // Read block changes from the start of the file directly into memory
-    size_t read = fread(block_changes, 1, (block_changes_cap * sizeof(BlockChange)), file);
-    if (read != (block_changes_cap * sizeof(BlockChange))) {
-      printf("Read %u bytes from \"world.bin\", expected %u (block changes). Aborting.\n", read, (block_changes_cap * sizeof(BlockChange)));
-      fclose(file);
-      return 1;
-    }
-    // Find the index of the last occupied entry to recover block_changes_count
-    for (int i = 0; i < (int)block_changes_cap; i ++) {
-      if (block_changes[i].block == 0xFF) continue;
-      if (block_changes[i].block == B_chest) i += 14;
-      if (i >= block_changes_count) block_changes_count = i + 1;
-    }
-    // Seek past block changes to start reading player data
-    if (fseek(file, (block_changes_cap * sizeof(BlockChange)), SEEK_SET) != 0) {
-      perror("Failed to seek to player data in \"world.bin\". Aborting.");
-      fclose(file);
-      return 1;
-    }
-    // Read player data directly into memory
-    read = fread(player_data, 1, sizeof(player_data), file);
-    fclose(file);
-    if (read != sizeof(player_data)) {
-      printf("Read %u bytes from \"world.bin\", expected %u (player data). Aborting.\n", read, sizeof(player_data));
-      return 1;
-    }
+  // Everyone is offline in a saved world
+  memcpy(dst, player_data, sizeof(player_data));
+  for (int i = 0; i < MAX_PLAYERS; i ++) {
+    int offline = -1;
+    memcpy(dst + i * sizeof(PlayerData) + offsetof(PlayerData, client_fd), &offline, sizeof(offline));
+  }
 
-  } else { // World file doesn't exist or failed to open
-    printf("No \"world.bin\" file found, creating one...\n\n");
+  return size;
+}
 
-    // Try to create the file in binary write mode
-    file = fopen(FILE_PATH, "wb");
-    if (!file) {
-      perror(
-        "Failed to open \"world.bin\" for writing.\n"
-        "Consider checking permissions or disabling SYNC_WORLD_TO_DISK in \"globals.h\"."
-      );
-      return 1;
-    }
-    // Write initial block changes array
-    // This should be done after all entries have had `block` set to 0xFF
-    size_t written = fwrite(block_changes, 1, (block_changes_cap * sizeof(BlockChange)), file);
-    if (written != (block_changes_cap * sizeof(BlockChange))) {
-      perror(
-        "Failed to write initial block data to \"world.bin\".\n"
-        "Consider checking permissions or disabling SYNC_WORLD_TO_DISK in \"globals.h\"."
-      );
-      fclose(file);
-      return 1;
-    }
-    // Seek past written block changes to start writing player data
-    if (fseek(file, (block_changes_cap * sizeof(BlockChange)), SEEK_SET) != 0) {
-      perror(
-        "Failed to seek past block changes in \"world.bin\"."
-        "Consider checking permissions or disabling SYNC_WORLD_TO_DISK in \"globals.h\"."
-      );
-      fclose(file);
-      return 1;
-    }
-    // Write initial player data to disk (should be just nulls?)
-    written = fwrite(player_data, 1, sizeof(player_data), file);
-    fclose(file);
-    if (written != sizeof(player_data)) {
-      perror(
-        "Failed to write initial player data to \"world.bin\".\n"
-        "Consider checking permissions or disabling SYNC_WORLD_TO_DISK in \"globals.h\"."
-      );
-      return 1;
-    }
+int worldSnapshotRead (const uint8_t *src, size_t len) {
+  WorldHeader header;
+  if (len < sizeof(header)) return BAREIRON_ERR_BAD_WORLD;
+  memcpy(&header, src, sizeof(header));
 
+  if (header.magic != WORLD_MAGIC || header.version != WORLD_VERSION) return BAREIRON_ERR_BAD_WORLD;
+  if (header.player_size != sizeof(PlayerData) || header.player_count > MAX_PLAYERS) return BAREIRON_ERR_BAD_WORLD;
+  if (header.block_changes_count > block_changes_cap) return BAREIRON_ERR_BAD_WORLD;
+  size_t expected = sizeof(header)
+    + (size_t)header.block_changes_count * sizeof(BlockChange)
+    + (size_t)header.player_count * sizeof(PlayerData);
+  if (len != expected) return BAREIRON_ERR_BAD_WORLD;
+  src += sizeof(header);
+
+  world_seed = header.world_seed;
+  world_time = header.world_time;
+
+  block_changes_count = header.block_changes_count;
+  memcpy(block_changes, src, (size_t)block_changes_count * sizeof(BlockChange));
+  for (uint32_t i = block_changes_count; i < block_changes_cap; i ++) block_changes[i].block = 0xFF;
+  src += (size_t)block_changes_count * sizeof(BlockChange);
+
+  memset(player_data, 0, sizeof(player_data));
+  memcpy(player_data, src, (size_t)header.player_count * sizeof(PlayerData));
+  player_data_count = 0;
+  for (int i = 0; i < MAX_PLAYERS; i ++) {
+    player_data[i].client_fd = -1;
+    for (int j = 0; j < 16; j ++) {
+      if (player_data[i].uuid[j] == 0) continue;
+      player_data_count ++;
+      break;
+    }
   }
 
   return 0;
 }
 
-// Writes a range of block change entries to disk
-void writeBlockChangesToDisk (int from, int to) {
+int saveWorldNow (void) {
+  size_t size = worldSnapshotSize();
+  uint8_t *buffer = platform->alloc_large(size);
+  if (!buffer) return BAREIRON_ERR_NO_MEMORY;
+  worldSnapshotWrite(buffer, size);
+  int result = platform->save_world(buffer, size);
+  platform->free_large(buffer);
 
-  // Try to open the file in rw (without overwriting)
-  FILE *file = fopen(FILE_PATH, "r+b");
-  if (!file) {
-    perror("Failed to open \"world.bin\". Block updates have been dropped.");
-    return;
+  last_save_time = get_program_time();
+  if (result != 0) {
+    printf("Failed to save the world (%d)\n", result);
+    statusEmit(BAREIRON_EVT_ERROR, NULL, result);
+    return result;
   }
-
-  for (int i = from; i <= to; i ++) {
-    // Seek to relevant offset in file
-    if (fseek(file, i * sizeof(BlockChange), SEEK_SET) != 0) {
-      fclose(file);
-      perror("Failed to seek in \"world.bin\". Block updates have been dropped.");
-      return;
-    }
-    // Write block change entry to file
-    if (fwrite(&block_changes[i], 1, sizeof(BlockChange), file) != sizeof(BlockChange)) {
-      fclose(file);
-      perror("Failed to write to \"world.bin\". Block updates have been dropped.");
-      return;
-    }
-  }
-
-  fclose(file);
+  world_dirty = false;
+  statusEmit(BAREIRON_EVT_WORLD_SAVED, NULL, (int)size);
+  return 0;
 }
 
-// Writes all player data to disk
-void writePlayerDataToDisk () {
-
-  // Try to open the file in rw (without overwriting)
-  FILE *file = fopen(FILE_PATH, "r+b");
-  if (!file) {
-    perror("Failed to open \"world.bin\". Player updates have been dropped.");
-    return;
-  }
-  // Seek past block changes in file
-  if (fseek(file, (block_changes_cap * sizeof(BlockChange)), SEEK_SET) != 0) {
-    fclose(file);
-    perror("Failed to seek in \"world.bin\". Player updates have been dropped.");
-    return;
-  }
-  // Write full player data array to file
-  // Since this is a bigger write, it should ideally be done infrequently
-  if (fwrite(&player_data, 1, sizeof(player_data), file) != sizeof(player_data)) {
-    fclose(file);
-    perror("Failed to write to \"world.bin\". Player updates have been dropped.");
-    return;
-  }
-
-  fclose(file);
+void saveWorldIfDue (void) {
+  if (!world_dirty) return;
+  if (get_program_time() - last_save_time < WORLD_SAVE_INTERVAL) return;
+  saveWorldNow();
 }
 
-// Writes data queued for interval writes, but only if enough time has passed
-void writeDataToDiskOnInterval () {
+int loadWorld (void) {
+  world_dirty = false;
+  last_save_time = get_program_time();
 
-  // Skip this write if enough time hasn't passed since the last one
-  if (get_program_time() - last_disk_sync_time < DISK_SYNC_INTERVAL) return;
-  last_disk_sync_time = get_program_time();
+  size_t capacity = sizeof(WorldHeader)
+    + (size_t)block_changes_cap * sizeof(BlockChange)
+    + MAX_PLAYERS * sizeof(PlayerData);
+  uint8_t *buffer = platform->alloc_large(capacity);
+  if (!buffer) return BAREIRON_ERR_NO_MEMORY;
 
-  // Write full player data and block changes buffers
-  writePlayerDataToDisk();
-  #ifdef DISK_SYNC_BLOCKS_ON_INTERVAL
-  writeBlockChangesToDisk(0, block_changes_count);
-  #endif
+  size_t len = 0;
+  int result = platform->load_world(buffer, capacity, &len);
+  if (result == 0) result = worldSnapshotRead(buffer, len);
+  else if (result < 0) result = BAREIRON_ERR_BAD_WORLD;
+  platform->free_large(buffer);
 
+  if (result == 0) {
+    printf("World loaded: %d block changes, seed %08X\n\n", block_changes_count, (unsigned int)world_seed);
+  } else if (result == 1) {
+    printf("No saved world, starting a new one with seed %08X\n\n", (unsigned int)world_seed);
+  } else {
+    printf("The saved world can't be read (%d). Not starting, so it isn't overwritten.\n", result);
+  }
+  return result;
 }
-
-#ifdef ALLOW_CHESTS
-// Writes a chest slot change to disk
-void writeChestChangesToDisk (uint8_t *storage_ptr, uint8_t slot) {
-  /**
-   * More chest-related memory hacks!!
-   *
-   * Since chests are implemented in the block_changes array, any
-   * changes to the contents of a chest have to be synced to the block
-   * changes part of the world file. The index of the "blocks" is
-   * determined as such:
-   *
-   * The storage pointer points to the block entry directly following
-   * the chest itself. To get the index of this entry, we can subtract
-   * the pointer to the block changes array (cast to uint8_t*) from the
-   * storage pointer. This gets us the amount of bytes between the start
-   * of the block changes array and the chest's item data, as a pointer.
-   * To get the actual block index, we cast this weird pointer to an
-   * integer, and divide it by the byte size of the BlockChange struct.
-   * Finally, the chest slot divided by 2 is added to this index to get
-   * the block entry pertaining to the relevant chest slot, as each
-   * entry encodes exactly 2 slots.
-   */
-  int index = (int)(storage_ptr - (uint8_t *)block_changes) / sizeof(BlockChange) + slot / 2;
-  writeBlockChangesToDisk(index, index);
-}
-#endif
-
-#endif

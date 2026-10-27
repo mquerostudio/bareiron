@@ -560,9 +560,7 @@ uint8_t makeBlockChange (short x, uint8_t y, short z, uint8_t block) {
     } else {
       block_changes[existing].block = block;
     }
-    #ifndef DISK_SYNC_BLOCKS_ON_INTERVAL
     writeBlockChangesToDisk(existing, existing);
-    #endif
     if (!clear || is_base_block) return 0;
   }
 
@@ -586,9 +584,7 @@ uint8_t makeBlockChange (short x, uint8_t y, short z, uint8_t block) {
     bc_on_set(start);
     if (start + 15 > block_changes_count) block_changes_count = start + 15;
     // Write changes to disk (if applicable)
-    #ifndef DISK_SYNC_BLOCKS_ON_INTERVAL
     writeBlockChangesToDisk(start, start + 14);
-    #endif
     return 0;
   }
   #endif
@@ -602,9 +598,7 @@ uint8_t makeBlockChange (short x, uint8_t y, short z, uint8_t block) {
   block_changes[gap] = (BlockChange){ .x = x, .z = z, .y = y, .block = block };
   bc_on_set(gap);
   // Write change to disk (if applicable)
-  #ifndef DISK_SYNC_BLOCKS_ON_INTERVAL
   writeBlockChangesToDisk(gap, gap);
-  #endif
   // Extend future search range if we've appended to the end
   if (gap >= block_changes_count) block_changes_count = gap + 1;
 
@@ -1901,9 +1895,7 @@ void broadcastChestUpdate (int origin_fd, uint8_t *storage_ptr, uint16_t item, u
     sc_setContainerSlot(player_data[i].client_fd, 2, slot, count, item);
   }
 
-  #ifndef DISK_SYNC_BLOCKS_ON_INTERVAL
   writeChestChangesToDisk(storage_ptr, slot);
-  #endif
 
 }
 #endif

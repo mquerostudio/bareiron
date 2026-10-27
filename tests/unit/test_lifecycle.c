@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <time.h>
+#include <stdio.h>
 
 #include "check.h"
 #include "bareiron.h"
@@ -56,6 +57,21 @@ static void test_bind_error_returns (void) {
   close(blocker);
 }
 
+// A world file that can't be read must stop the start, and stay as it was
+static void test_bad_world_is_kept (void) {
+  FILE *file = fopen("world.bin", "wb");
+  fputs("not a world", file);
+  fclose(file);
+  config.port = 25597;
+  CHECK(bareiron_run(&config) == -5);
+  char buffer[32] = { 0 };
+  file = fopen("world.bin", "rb");
+  CHECK(fread(buffer, 1, sizeof(buffer), file) == 11);
+  fclose(file);
+  CHECK(strcmp(buffer, "not a world") == 0);
+  remove("world.bin");
+}
+
 int main (void) {
   // Keep any world file away from the repository
   char dir[] = "/tmp/bareiron-test-XXXXXX";
@@ -69,5 +85,6 @@ int main (void) {
 
   RUN(test_run_and_stop);
   RUN(test_bind_error_returns);
+  RUN(test_bad_world_is_kept);
   return CHECK_DONE();
 }
