@@ -98,6 +98,11 @@ extern const BareironPlatform *platform;
 // be necessary.
 // #define DISK_SYNC_BLOCKS_ON_INTERVAL
 
+// If defined, compresses packets of at least COMPRESSION_THRESHOLD bytes.
+// Chunk data shrinks several times over, which matters most on weak links.
+#define ENABLE_COMPRESSION
+#define COMPRESSION_THRESHOLD 256
+
 // Size of the receive buffer for incoming string data
 #define MAX_RECV_BUF_LEN 256
 

@@ -11,7 +11,7 @@ if [ ${#names[@]} -eq 0 ]; then
 fi
 srcs=$(ls src/*.c | grep -v '^src/main.c$')
 extra=""
-[ -f third_party/miniz/miniz.c ] && extra="third_party/miniz/miniz.c -Ithird_party/miniz"
+[ -f third_party/miniz/miniz.c ] && extra="third_party/miniz/miniz.c -Ithird_party/miniz -DMINIZ_NO_STDIO -DMINIZ_NO_TIME -DMINIZ_NO_ARCHIVE_APIS -DMINIZ_NO_ZLIB_COMPATIBLE_NAMES"
 failed=0
 for name in "${names[@]}"; do
   cc -O1 -g -Wall -Wno-unused-function -Iinclude -Itests/unit $extra $srcs "tests/unit/$name.c" -lpthread -o "build/tests/$name" 2> "build/tests/$name.cc.log" \

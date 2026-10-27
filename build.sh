@@ -41,4 +41,5 @@ for arg in "$@"; do
 done
 
 rm -f "bareiron$exe"
-$compiler src/*.c -O2 -Iinclude -o "bareiron$exe" $windows_linker
+miniz="third_party/miniz/miniz.c -Ithird_party/miniz -DMINIZ_NO_STDIO -DMINIZ_NO_TIME -DMINIZ_NO_ARCHIVE_APIS -DMINIZ_NO_ZLIB_COMPATIBLE_NAMES"
+$compiler src/*.c $miniz -O2 -Iinclude -o "bareiron$exe" $windows_linker

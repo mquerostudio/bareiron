@@ -18,8 +18,9 @@ class BaselineTest(unittest.TestCase):
       bot.play_for(5)
       print("\nbytes_received=%d chunks_received=%d" % (bot.bytes_received, bot.chunks_received))
       bot.close()
+      # Uncompressed this was 3 630 016 bytes (docs/perf.md); compression
+      # limits are checked in test_compression.py
       self.assertEqual(bot.chunks_received, 25)
-      self.assertGreater(bot.bytes_received, 3_000_000)
 
   def test_status_ping_answers(self):
     with ServerProcess(PORT):

@@ -24,4 +24,8 @@ int     net_next_packet (int fd, int *length);     // 1 = a whole packet is curr
 ssize_t net_read (int fd, void *buf, size_t n);    // reads from the current packet; returns < n at its end
 void    net_finish_packet (int fd);                // drops unread bytes of the current packet
 
+// Switches a client to the compressed frame format. Frames written before
+// this call still leave uncompressed.
+void    net_enable_compression (int fd, int threshold);
+
 #endif

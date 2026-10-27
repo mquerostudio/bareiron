@@ -80,6 +80,9 @@ void handlePacket (int client_fd, int length, int packet_id, int state) {
           recv_count = 0;
           return;
         }
+        #ifdef ENABLE_COMPRESSION
+        sc_setCompression(client_fd, COMPRESSION_THRESHOLD);
+        #endif
         if (sc_loginSuccess(client_fd, uuid, name)) break;
       } else if (state == STATE_CONFIGURATION) {
         if (cs_clientInformation(client_fd)) break;

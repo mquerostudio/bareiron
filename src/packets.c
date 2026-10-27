@@ -23,6 +23,7 @@
 #include "crafting.h"
 #include "procedures.h"
 #include "packets.h"
+#include "net.h"
 
 // S->C Status Response (server list ping)
 int sc_statusResponse (int client_fd) {
@@ -78,6 +79,16 @@ int cs_loginStart (int client_fd, uint8_t *uuid, char *name) {
   for (int i = 0; i < 16; i ++) printf("%x", uuid[i]);
   printf("\n\n");
 
+  return 0;
+}
+
+// S->C Set Compression
+// Everything sent after this packet uses the compressed frame format
+int sc_setCompression (int client_fd, int threshold) {
+  writeVarInt(client_fd, 1 + sizeVarInt(threshold));
+  writeByte(client_fd, 0x03);
+  writeVarInt(client_fd, threshold);
+  net_enable_compression(client_fd, threshold);
   return 0;
 }
 
