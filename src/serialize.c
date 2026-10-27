@@ -3,6 +3,7 @@
 
 #include "globals.h"
 #include "tools.h"
+#include "registries.h"
 #include "status.h"
 #include "serialize.h"
 
@@ -66,6 +67,16 @@ int worldSnapshotRead (const uint8_t *src, size_t len) {
   if (len != expected) return BAREIRON_ERR_BAD_WORLD;
   src += sizeof(header);
 
+  // Every chest needs its 14 entries of item data inside the file
+  #ifdef ALLOW_CHESTS
+  const BlockChange *changes = (const BlockChange *)src;
+  for (uint32_t i = 0; i < header.block_changes_count; i ++) {
+    if (changes[i].block != B_chest) continue;
+    if (i + 14 >= header.block_changes_count) return BAREIRON_ERR_BAD_WORLD;
+    i += 14;
+  }
+  #endif
+
   world_seed = header.world_seed;
   world_time = header.world_time;
 
@@ -78,9 +89,17 @@ int worldSnapshotRead (const uint8_t *src, size_t len) {
   memcpy(player_data, src, (size_t)header.player_count * sizeof(PlayerData));
   player_data_count = 0;
   for (int i = 0; i < MAX_PLAYERS; i ++) {
-    player_data[i].client_fd = -1;
+    PlayerData *player = &player_data[i];
+    player->client_fd = -1;
+    // Nothing from the file may index out of bounds or point anywhere:
+    // drop the flags that only make sense while connected, and with them
+    // any chest pointer kept in craft_items
+    player->name[sizeof(player->name) - 1] = '\0';
+    if (player->hotbar >= 9) player->hotbar = 0;
+    if (player->flags & 0x80) memset(player->craft_items, 0, sizeof(player->craft_items));
+    player->flags &= ~(0x01 | 0x04 | 0x08 | 0x10 | 0x20 | 0x40 | 0x80);
     for (int j = 0; j < 16; j ++) {
-      if (player_data[i].uuid[j] == 0) continue;
+      if (player->uuid[j] == 0) continue;
       player_data_count ++;
       break;
     }

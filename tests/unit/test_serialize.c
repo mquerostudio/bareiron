@@ -98,6 +98,47 @@ static void test_online_player_marks_world_dirty (void) {
   CHECK(worldIsDirty());
 }
 
+// A world file comes from an SD card: whatever it says, loading it must
+// not leave values that index out of bounds or point at stale memory
+static void test_loaded_players_are_sanitized (void) {
+  buildWorld();
+  player_data[1].hotbar = 200;
+  player_data[1].flags = 0x80 | 0x10 | 0x20 | 0x01 | 0x02;
+  memset(player_data[1].craft_items, 0xAB, sizeof(player_data[1].craft_items));
+  memset(player_data[1].name, 'A', 16);
+  size_t size = worldSnapshotSize();
+  uint8_t *buffer = malloc(size);
+  worldSnapshotWrite(buffer, size);
+  resetWorld();
+  CHECK(worldSnapshotRead(buffer, size) == 0);
+  CHECK(player_data[1].hotbar < 9);
+  CHECK((player_data[1].flags & (0x01 | 0x04 | 0x08 | 0x10 | 0x20 | 0x40 | 0x80)) == 0);
+  CHECK(player_data[1].flags & 0x02);
+  CHECK(player_data[1].craft_items[0] == 0 && player_data[1].craft_items[8] == 0);
+  CHECK(player_data[1].name[15] == '\0');
+  free(buffer);
+}
+
+static void test_chest_overrunning_count_rejected (void) {
+  resetWorld();
+  for (int i = 0; i < 4; i ++) makeBlockChange(i, 120, 0, B_stone);
+  makeBlockChange(10, 120, 0, B_chest);   // entries 4..18
+  size_t size = worldSnapshotSize();
+  uint8_t *buffer = malloc(size);
+  worldSnapshotWrite(buffer, size);
+  // Cut the block changes right after the chest itself
+  WorldHeader header;
+  memcpy(&header, buffer, sizeof(header));
+  uint32_t full = header.block_changes_count;
+  header.block_changes_count = 5;
+  memcpy(buffer, &header, sizeof(header));
+  size_t players = MAX_PLAYERS * sizeof(PlayerData);
+  memmove(buffer + sizeof(header) + 5 * sizeof(BlockChange),
+          buffer + sizeof(header) + full * sizeof(BlockChange), players);
+  CHECK(worldSnapshotRead(buffer, sizeof(header) + 5 * sizeof(BlockChange) + players) == -5);
+  free(buffer);
+}
+
 int main (void) {
   // Saves land in the working directory; keep them out of the repository
   char dir[] = "/tmp/bareiron-test-XXXXXX";
@@ -108,5 +149,7 @@ int main (void) {
   RUN(test_bad_magic_rejected);
   RUN(test_truncated_rejected);
   RUN(test_online_player_marks_world_dirty);
+  RUN(test_loaded_players_are_sanitized);
+  RUN(test_chest_overrunning_count_rejected);
   return CHECK_DONE();
 }
