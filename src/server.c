@@ -231,14 +231,19 @@ static void handleClientPackets (int *client_slot) {
 
 int bareiron_run (const BareironConfig *config) {
   platform = config->platform;
-  stop_requested = 0;
+  // stop_requested is cleared on the way out, not here: a stop asked for
+  // before this task got going is still a stop
 
   block_changes_cap = config->max_block_changes;
   block_changes = platform->alloc_large(block_changes_cap * sizeof(BlockChange));
-  if (!block_changes) return BAREIRON_ERR_NO_MEMORY;
+  if (!block_changes) {
+    stop_requested = 0;
+    return BAREIRON_ERR_NO_MEMORY;
+  }
   if (bc_index_init(block_changes_cap)) {
     platform->free_large(block_changes);
     block_changes = NULL;
+    stop_requested = 0;
     return BAREIRON_ERR_NO_MEMORY;
   }
 
@@ -253,6 +258,7 @@ int bareiron_run (const BareironConfig *config) {
     bc_index_free();
     platform->free_large(block_changes);
     block_changes = NULL;
+    stop_requested = 0;
     return loaded;
   }
   bc_index_rebuild();
@@ -262,6 +268,7 @@ int bareiron_run (const BareironConfig *config) {
     bc_index_free();
     platform->free_large(block_changes);
     block_changes = NULL;
+    stop_requested = 0;
     return server_fd;
   }
 
@@ -334,5 +341,6 @@ int bareiron_run (const BareironConfig *config) {
   statusSetRunning(false);
   printf("Server closed.\n");
   statusEmit(BAREIRON_EVT_STOPPED, NULL, 0);
+  stop_requested = 0;
   return 0;
 }

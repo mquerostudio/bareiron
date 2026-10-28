@@ -47,6 +47,31 @@ static void test_run_and_stop (void) {
   CHECK(run_result == 0);
 }
 
+// A stop asked for just before the server task starts must not be lost:
+// the app has already shown "Parando" and waits for STOPPED
+static void test_stop_before_run_is_kept (void) {
+  config.port = 25597;
+  bareiron_request_stop();
+  pthread_t thread;
+  run_result = 12345;
+  int64_t start = now_ms();
+  pthread_create(&thread, NULL, run_thread, NULL);
+  // Without the fix the server would run until someone stops it again
+  for (int i = 0; i < 30 && run_result == 12345; i ++) usleep(100 * 1000);
+  if (run_result == 12345) {
+    bareiron_request_stop();
+    pthread_join(thread, NULL);
+    CHECK(!"bareiron_run ignored a stop requested before it started");
+    return;
+  }
+  pthread_join(thread, NULL);
+  CHECK(run_result == 0);
+  CHECK(now_ms() - start < 3000);
+  // And the next run is a normal one
+  CHECK(run_then_stop() < 1500);
+  CHECK(run_result == 0);
+}
+
 static void test_bind_error_returns (void) {
   int blocker = socket(AF_INET, SOCK_STREAM, 0);
   struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons(25598), .sin_addr.s_addr = INADDR_ANY };
@@ -84,6 +109,7 @@ int main (void) {
   config.platform = bareiron_posix_platform();
 
   RUN(test_run_and_stop);
+  RUN(test_stop_before_run_is_kept);
   RUN(test_bind_error_returns);
   RUN(test_bad_world_is_kept);
   return CHECK_DONE();
