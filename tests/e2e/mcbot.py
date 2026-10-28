@@ -238,12 +238,15 @@ class Bot:
     self.send(SB_PLAY_SET_POSITION, struct.pack(">dddB", x, y, z, 1))
     self.position = (x, y, z)
 
-  def walk_circle(self, seconds, radius=40.0, step_s=0.05):
-    """Walk in a circle around the spawn point, answering keep-alives."""
+  def walk_circle(self, seconds, radius=40.0, step_s=0.05, speed=20.0):
+    """Walk in a circle around the spawn point, answering keep-alives.
+
+    `speed` is in blocks per second: the default 20 is a stress test, about
+    five times a walking player (4.3)."""
     cx, y, cz = self.position
     start = time.monotonic()
     while time.monotonic() - start < seconds:
-      angle = (time.monotonic() - start) * 0.5
+      angle = (time.monotonic() - start) * speed / radius
       self.move_to(cx + radius * math.cos(angle), y, cz + radius * math.sin(angle))
       self.pump(step_s)
 

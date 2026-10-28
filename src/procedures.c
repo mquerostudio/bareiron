@@ -402,10 +402,10 @@ void spawnPlayer (PlayerData *player) {
 
   task_yield(); // Check task timer between packets
 
-  // Send the spawn chunk now, so the player can appear; the rest wait in
-  // the chunk queue, nearest ring first, and go out a few per loop
-  sc_chunkDataAndUpdateLight(player->client_fd, _x, _z);
+  // The spawn chunk goes first and the rest wait behind it in the chunk
+  // queue, nearest ring first: one per loop, never a whole join at once
   cq_reset(player->client_fd);
+  queueChunk(player->client_fd, _x, _z);
   for (int ring = 1; ring <= VIEW_DISTANCE; ring ++) {
     for (int i = -ring; i <= ring; i ++) {
       for (int j = -ring; j <= ring; j ++) {
@@ -414,7 +414,7 @@ void spawnPlayer (PlayerData *player) {
       }
     }
   }
-  // Re-teleport player now that the chunk under them is there
+  // The client keeps the player in place until the chunk under them arrives
   sc_synchronizePlayerPosition(player->client_fd, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch);
 
   task_yield(); // Check task timer between packets
