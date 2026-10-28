@@ -33,6 +33,7 @@
 #include "net.h"
 #include "blockindex.h"
 #include "status.h"
+#include "chunkqueue.h"
 
 static volatile int stop_requested = 0;
 
@@ -243,6 +244,7 @@ int bareiron_run (const BareironConfig *config) {
 
   resetServerState(config);
   statusReset();
+  cq_clear();
 
 
   // Pick up the saved world, if there is one
@@ -288,6 +290,9 @@ int bareiron_run (const BareironConfig *config) {
     int64_t loop_start = get_program_time();
 
     acceptClient(server_fd, clients);
+
+    // A few queued chunks per iteration, never a whole join at once
+    cq_pump(CHUNKS_PER_ITERATION);
 
     // Handle periodic events (server ticks), with or without players
     int64_t time_since_last_tick = get_program_time() - last_tick_time;

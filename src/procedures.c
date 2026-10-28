@@ -15,6 +15,7 @@
 #include "structures.h"
 #include "serialize.h"
 #include "procedures.h"
+#include "chunkqueue.h"
 #include "blockindex.h"
 #include "status.h"
 #include "dispatch.h"
@@ -219,6 +220,7 @@ void handlePlayerJoin (PlayerData* player) {
 void disconnectClient (int *client_fd, int cause) {
   if (*client_fd == -1) return;
   client_count --;
+  cq_reset(*client_fd);
   setClientState(*client_fd, STATE_NONE);
   handlePlayerDisconnect(*client_fd);
   // Best effort: let queued packets (like a status pong) out before closing
@@ -400,15 +402,19 @@ void spawnPlayer (PlayerData *player) {
 
   task_yield(); // Check task timer between packets
 
-  // Send spawn chunk first
+  // Send the spawn chunk now, so the player can appear; the rest wait in
+  // the chunk queue, nearest ring first, and go out a few per loop
   sc_chunkDataAndUpdateLight(player->client_fd, _x, _z);
-  for (int i = -VIEW_DISTANCE; i <= VIEW_DISTANCE; i ++) {
-    for (int j = -VIEW_DISTANCE; j <= VIEW_DISTANCE; j ++) {
-      if (i == 0 && j == 0) continue;
-      sc_chunkDataAndUpdateLight(player->client_fd, _x + i, _z + j);
+  cq_reset(player->client_fd);
+  for (int ring = 1; ring <= VIEW_DISTANCE; ring ++) {
+    for (int i = -ring; i <= ring; i ++) {
+      for (int j = -ring; j <= ring; j ++) {
+        if (i != -ring && i != ring && j != -ring && j != ring) continue;
+        queueChunk(player->client_fd, _x + i, _z + j);
+      }
     }
   }
-  // Re-teleport player after all chunks have been sent
+  // Re-teleport player now that the chunk under them is there
   sc_synchronizePlayerPosition(player->client_fd, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch);
 
   task_yield(); // Check task timer between packets

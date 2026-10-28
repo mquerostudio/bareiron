@@ -11,6 +11,7 @@ endif()
 idf_component_register(
   SRCS
     src/blockindex.c
+    src/chunkqueue.c
     src/crafting.c
     src/dispatch.c
     src/globals.c

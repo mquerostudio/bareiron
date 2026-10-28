@@ -49,6 +49,37 @@ class LoadTest(unittest.TestCase):
         bot.close()
       self.assertLess(worst_loop, 250_000)
 
+  def test_join_burst_is_spread(self):
+    """A join no longer builds all 25 chunks in one loop iteration."""
+    with ServerProcess(PORT) as server:
+      time.sleep(1.5)                       # let the idle loop settle
+      bot = Bot(port=PORT, name="joiner")
+      start = time.monotonic()
+      done = threading.Event()
+      worst = [0]
+
+      def watch():
+        while not done.is_set():
+          worst[0] = max(worst[0], server.status()["loop_max_us"])
+          time.sleep(0.2)
+
+      watcher = threading.Thread(target=watch)
+      watcher.start()
+      try:
+        bot.login()
+        while bot.chunks_received < 25 and time.monotonic() - start < 5:
+          bot.pump(0.1)
+        got_all = time.monotonic() - start
+        bot.pump(1.5)                       # one more status window
+      finally:
+        done.set()
+        watcher.join()
+      print("\njoin: worst loop iteration %d us, 25 chunks after %.2f s" % (worst[0], got_all))
+      self.assertGreaterEqual(bot.chunks_received, 25)
+      self.assertLess(got_all, 5)
+      self.assertLess(worst[0], 40_000)
+      bot.close()
+
 
 if __name__ == "__main__":
   unittest.main()

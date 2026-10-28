@@ -29,6 +29,7 @@
 #include "tools.h"
 #include "varnum.h"
 #include "packets.h"
+#include "chunkqueue.h"
 #include "worldgen.h"
 #include "registries.h"
 #include "procedures.h"
@@ -397,21 +398,21 @@ void handlePacket (int client_fd, int length, int packet_id, int state) {
         sc_setCenterChunk(client_fd, _x, _z);
 
         while (dx != 0) {
-          sc_chunkDataAndUpdateLight(client_fd, _x + dx * VIEW_DISTANCE, _z);
+          queueChunk(client_fd, _x + dx * VIEW_DISTANCE, _z);
           count ++;
           for (int i = 1; i <= VIEW_DISTANCE; i ++) {
-            sc_chunkDataAndUpdateLight(client_fd, _x + dx * VIEW_DISTANCE, _z - i);
-            sc_chunkDataAndUpdateLight(client_fd, _x + dx * VIEW_DISTANCE, _z + i);
+            queueChunk(client_fd, _x + dx * VIEW_DISTANCE, _z - i);
+            queueChunk(client_fd, _x + dx * VIEW_DISTANCE, _z + i);
             count += 2;
           }
           dx += dx > 0 ? -1 : 1;
         }
         while (dz != 0) {
-          sc_chunkDataAndUpdateLight(client_fd, _x, _z + dz * VIEW_DISTANCE);
+          queueChunk(client_fd, _x, _z + dz * VIEW_DISTANCE);
           count ++;
           for (int i = 1; i <= VIEW_DISTANCE; i ++) {
-            sc_chunkDataAndUpdateLight(client_fd, _x - i, _z + dz * VIEW_DISTANCE);
-            sc_chunkDataAndUpdateLight(client_fd, _x + i, _z + dz * VIEW_DISTANCE);
+            queueChunk(client_fd, _x - i, _z + dz * VIEW_DISTANCE);
+            queueChunk(client_fd, _x + i, _z + dz * VIEW_DISTANCE);
             count += 2;
           }
           dz += dz > 0 ? -1 : 1;
