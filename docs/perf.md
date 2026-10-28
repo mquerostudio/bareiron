@@ -31,3 +31,15 @@ La peor vuelta coincide con la entrada de un jugador: los 25 chunks se generan y
 | `libbareiron.a` (núcleo + miniz) | 23 141 B (19 957 + 3 184) | 47 874 B |
 
 Las tablas de registros ya caben de sobra en RAM interna, así que no hace falta marcarlas `const`.
+
+## Sin pausas dentro de un chunk (Plan 4, Task 1)
+
+`sc_chunkDataAndUpdateLight` llamaba a `task_yield()` 22 veces por chunk, y `spawnPlayer` otras 3. Venía de cuando el servidor compartía núcleo con todo lo demás. En el ESP32-P4 cada una es un `vTaskDelay(1)`, hasta 1 ms. El bucle principal ya cede el núcleo una vez por vuelta, y con un chunk por vuelta no hace falta más.
+
+`tests/bench/chunk_bench.c` (Mac, -O2): un chunk completo, generado, enmarcado y comprimido, cuesta 0,43 ms. La generación de las 20 secciones son 0,21 ms (solo las 8 de abajo, 0,09 ms) y la compresión otro tanto.
+
+| Mac, e2e | Antes | Ahora |
+|---|---:|---:|
+| Peor vuelta del bucle en una entrada | ~6 ms | 0,55 ms |
+| Peor vuelta con 6 bots | ~48 ms | 4,0 ms |
+| 25 chunks recibidos tras entrar | 0,21 s | 0,10 s |

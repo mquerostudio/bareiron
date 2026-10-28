@@ -370,7 +370,6 @@ void spawnPlayer (PlayerData *player) {
   // Teleport player to spawn coordinates (first pass)
   sc_synchronizePlayerPosition(player->client_fd, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch);
 
-  task_yield(); // Check task timer between packets
 
   // Clear crafting grid residue, unlock craft_items
   for (int i = 0; i < 9; i++) {
@@ -404,7 +403,6 @@ void spawnPlayer (PlayerData *player) {
   sc_startWaitingForChunks(player->client_fd);
   sc_setCenterChunk(player->client_fd, _x, _z);
 
-  task_yield(); // Check task timer between packets
 
   // The spawn chunk goes first and the rest wait behind it in the chunk
   // queue, nearest ring first: one per loop, never a whole join at once
@@ -421,7 +419,6 @@ void spawnPlayer (PlayerData *player) {
   // The client keeps the player in place until the chunk under them arrives
   sc_synchronizePlayerPosition(player->client_fd, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch);
 
-  task_yield(); // Check task timer between packets
 
 }
 
