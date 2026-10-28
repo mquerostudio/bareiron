@@ -50,6 +50,30 @@ static void test_pump_respects_budget_and_alternates (void) {
   CHECK(cq_pending(7) == 0 && cq_pending(9) == 0);
 }
 
+// At the budget the server really uses, one chunk per iteration, clients
+// take turns: two joining together get the same share
+static void test_budget_one_takes_turns (void) {
+  fresh();
+  for (int i = 0; i < 8; i ++) {
+    CHECK(cq_push(11, i, 0) == 0);
+    CHECK(cq_push(12, i, 0) == 0);
+  }
+  for (int i = 0; i < 16; i ++) CHECK(cq_pump(1) == 1);
+  for (int i = 1; i < 16; i ++) CHECK(sent_fd[i] != sent_fd[i - 1]);
+}
+
+// With a bigger budget, one round still gives every waiting client one
+static void test_bigger_budget_skips_nobody (void) {
+  fresh();
+  for (int fd = 20; fd < 24; fd ++) {
+    for (int i = 0; i < 3; i ++) CHECK(cq_push(fd, i, 0) == 0);
+  }
+  CHECK(cq_pump(4) == 4);
+  int seen[4] = {0};
+  for (int i = 0; i < 4; i ++) seen[sent_fd[i] - 20] ++;
+  for (int i = 0; i < 4; i ++) CHECK(seen[i] == 1);
+}
+
 static void test_full_queue_refuses (void) {
   fresh();
   for (int i = 0; i < CHUNK_QUEUE_LEN; i ++) CHECK(cq_push(3, i, i) == 0);
@@ -77,6 +101,8 @@ static void test_more_clients_than_queues (void) {
 int main (void) {
   RUN(test_push_does_not_duplicate);
   RUN(test_pump_respects_budget_and_alternates);
+  RUN(test_budget_one_takes_turns);
+  RUN(test_bigger_budget_skips_nobody);
   RUN(test_full_queue_refuses);
   RUN(test_reset_drops_a_client);
   RUN(test_more_clients_than_queues);

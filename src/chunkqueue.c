@@ -78,12 +78,16 @@ int cq_pending (int client_fd) {
 int cq_pump (int budget) {
   cqInit();
   int sent = 0;
-  // One chunk per client per round, so nobody waits behind a whole join
+  // One chunk per client per round, so nobody waits behind a whole join;
+  // the next turn starts just after the last client served
   while (sent < budget) {
     int sent_this_round = 0;
+    int start = next_queue;
     for (int n = 0; n < MAX_CONNECTIONS && sent < budget; n ++) {
-      ChunkQueue *queue = &queues[(next_queue + n) % MAX_CONNECTIONS];
+      int index = (start + n) % MAX_CONNECTIONS;
+      ChunkQueue *queue = &queues[index];
       if (queue->fd == -1 || queue->count == 0) continue;
+      next_queue = (index + 1) % MAX_CONNECTIONS;
       short x = queue->x[queue->head], z = queue->z[queue->head];
       queue->head = (queue->head + 1) % CHUNK_QUEUE_LEN;
       queue->count --;
@@ -93,7 +97,6 @@ int cq_pump (int budget) {
       sent ++;
       sent_this_round ++;
     }
-    next_queue = (next_queue + 1) % MAX_CONNECTIONS;
     if (sent_this_round == 0) break;
   }
   return sent;
