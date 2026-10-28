@@ -9,7 +9,7 @@ from mcbot import Bot  # noqa: E402
 from server import ServerProcess  # noqa: E402
 from test_load import keep_alive_gap  # noqa: E402
 
-PORT = 25565
+PORT = int(os.environ.get("BAREIRON_TEST_PORT", "25565"))  # another port if 25565 is taken
 
 
 def wait_for(predicate, timeout=10.0):

@@ -489,3 +489,22 @@ uint8_t buildChunkSection (int cx, int cy, int cz) {
   return chunk_anchors[0].biome;
 
 }
+
+// The highest Y with anything in chunk (cx, cz): the terrain plus room for
+// trees, the water line, and every block players changed. Sections above it
+// are all air and go out as one value instead of 4096 generated blocks.
+uint8_t chunkTopY (short cx, short cz) {
+  int top = 64;   // water fills up to 63, lily pads sit on 64
+  for (int z = 0; z < 16; z ++) {
+    for (int x = 0; x < 16; x ++) {
+      int h = getHeightAt(cx * 16 + x, cz * 16 + z) + 8;   // trees reach ~7 above the ground
+      if (h > top) top = h;
+    }
+  }
+  const int *indices;
+  int count = bc_column(cx, cz, &indices);
+  for (int i = 0; i < count; i ++) {
+    if (block_changes[indices[i]].y > top) top = block_changes[indices[i]].y;
+  }
+  return top > 255 ? 255 : (uint8_t)top;
+}

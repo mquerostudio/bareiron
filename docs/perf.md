@@ -43,3 +43,17 @@ Las tablas de registros ya caben de sobra en RAM interna, así que no hace falta
 | Peor vuelta del bucle en una entrada | ~6 ms | 0,55 ms |
 | Peor vuelta con 6 bots | ~48 ms | 4,0 ms |
 | 25 chunks recibidos tras entrar | 0,21 s | 0,10 s |
+
+## El cielo en una sección de un solo valor (Plan 4, Task 2)
+
+`chunkTopY` da la Y más alta con algo en un chunk: el terreno más 8 de margen para árboles, el agua hasta 64 y cualquier cambio de bloque. Las secciones por encima salen como "todo aire" (6 bytes) en vez de 4096 bloques generados. `test_sky_predicate_is_exact` comprueba en 5 semillas que nunca se toma por cielo una sección con algo; y `test_chunk_packet_format` decodifica el paquete como el cliente.
+
+| Mac | Tras la Task 1 | Ahora |
+|---|---:|---:|
+| Datos de un chunk sin comprimir | 91 792 B | 23 092 B (15 de 20 secciones son cielo) |
+| Un chunk completo, comprimido | 0,43 ms | 0,19 ms |
+| Peor vuelta en una entrada (e2e) | 0,55 ms | 0,21 ms |
+| Peor vuelta con 6 bots (e2e) | 4,0 ms | 1,4 ms |
+| Bytes recibidos al entrar | 55 534 | 50 648 |
+
+Las pruebas e2e admiten `BAREIRON_TEST_PORT` para no chocar con otro servidor en 25565.

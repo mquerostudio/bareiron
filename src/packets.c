@@ -351,7 +351,12 @@ int sc_setCenterChunk (int client_fd, int x, int y) {
 // S->C Chunk Data and Update Light
 int sc_chunkDataAndUpdateLight (int client_fd, int _x, int _z) {
 
-  const int chunk_data_size = (4101 + sizeVarInt(256) + sizeof(network_block_palette)) * 20 + 6 * 12;
+  // Sections above everything in this chunk are all air: they go out as one
+  // value, like the empty ones on top, instead of 4096 generated blocks
+  const uint8_t top = chunkTopY(_x, _z);
+  int sky = 0;
+  for (int i = 0; i < 20; i ++) if (i * 16 > top) sky ++;
+  const int chunk_data_size = (4101 + sizeVarInt(256) + sizeof(network_block_palette)) * (20 - sky) + 6 * (12 + sky);
   const int light_data_size = 14 + (sizeVarInt(2048) + 2048) * 26;
 
   writeVarInt(client_fd, 11 + sizeVarInt(chunk_data_size) + chunk_data_size + light_data_size);
@@ -376,15 +381,24 @@ int sc_chunkDataAndUpdateLight (int client_fd, int _x, int _z) {
   }
 
   // send chunk sections
+  uint8_t biome = 0;
   for (int i = 0; i < 20; i ++) {
     y = i * 16;
+    if (y > top) {
+      writeUint16(client_fd, 0); // block count
+      writeByte(client_fd, 0); // block bits
+      writeVarInt(client_fd, 0); // block palette (air)
+      writeByte(client_fd, 0); // biome bits
+      writeByte(client_fd, biome); // biome palette
+      continue;
+    }
     writeUint16(client_fd, 4096); // block count
     writeByte(client_fd, 8); // bits per entry
     writeVarInt(client_fd, 256); // block palette length
     // block palette as varint buffer
     send_all(client_fd, network_block_palette, sizeof(network_block_palette));
     // chunk section buffer
-    uint8_t biome = buildChunkSection(x, y, z);
+    biome = buildChunkSection(x, y, z);
     send_all(client_fd, chunk_section, 4096);
     // biome data
     writeByte(client_fd, 0); // bits per entry

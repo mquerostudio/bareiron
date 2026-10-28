@@ -26,5 +26,6 @@ uint8_t getBlockAt (int x, int y, int z);
 
 extern uint8_t chunk_section[4096];
 uint8_t buildChunkSection (int cx, int cy, int cz);
+uint8_t chunkTopY (short cx, short cz); // nothing but air above this Y in chunk (cx, cz)
 
 #endif
